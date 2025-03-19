@@ -33,7 +33,7 @@ contract ChainflowContract {
         return address(paymentContract);
     }
 
-    function newsubscription(
+    function newSubscription(
         address token,
         uint256 amount,
         address to,
@@ -53,6 +53,13 @@ contract ChainflowContract {
         // create gelato task
     }
 
+    // function cancelSubscription(uint256 index) public {
+    //     require(subscriptions.length >index, "Index out of bounds");
+    //     require(subscriptions[index].from == msg.sender, "You are not the owner of this subscription");
+    //     subscriptions[index].active = false;
+    //     userNbSubs[msg.sender]--;
+    // }
+
     function getMySubscriptions() public view returns (uint256[] memory) {
         uint256[] memory mySubs = new uint256[](userNbSubs[msg.sender]);
         uint8 j = 0;
@@ -67,7 +74,7 @@ contract ChainflowContract {
     }
 
     function getSubscription(uint256 index) public view returns (Subscription memory) {
-        require(subscriptions.length < index, "Index out of bounds");
+        require(subscriptions.length > index, "Index out of bounds");
         require(subscriptions[index].from == msg.sender, "You are not the owner of this subscription");
         return subscriptions[index];
     }
