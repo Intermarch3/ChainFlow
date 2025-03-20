@@ -1,3 +1,6 @@
 [submodule "contracts/lib/openzeppelin-contracts"]
 	path = contracts/lib/openzeppelin-contracts
 	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "contracts/lib/automate"]
+	path = contracts/lib/automate
+	url = https://github.com/gelatodigital/automate
