@@ -14,12 +14,12 @@
 </template>
 
 <script>
-import { createWalletClient, http, encodeFunctionData, createPublicClient, formatEther } from 'viem'
-import { parseEther } from 'viem'
+import { createWalletClient, http, encodeFunctionData, createPublicClient, formatEther, parseEther, zeroAddress } from 'viem'
 import { anvil } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 import { eip7702Actions } from 'viem/experimental'
-import { abi, contractAddress } from './contracts/TestContract'
+import { PaymentAbi, PaymentContractAddress } from './contracts/PaymentContract'
+import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
 
 export default {
   name: 'App',
@@ -36,7 +36,6 @@ export default {
         typeof value === 'bigint' ? value.toString() : value
       );
     },
-    
     async executeBlockchainScript() {
       this.isLoading = true
       this.results = []
@@ -60,10 +59,10 @@ export default {
         this.addResult(`Compte 1: ${acc1.address}`)
         this.addResult(`Compte 2: ${acc2.address}`)
         
-        // Signature de l'autorisation
+        // Signature de l'autorisation (! Attention nonce)
         const authorization = await walletClient.signAuthorization({
           account: acc1,
-          contractAddress: contractAddress,
+          contractAddress: PaymentContractAddress,
         })
         this.addResult(`Autorisation signée: ${this.safejsonStringify(authorization)}`)
         
@@ -72,23 +71,28 @@ export default {
           account: acc1,
           authorizationList: [authorization],
           data: encodeFunctionData({
-            abi,
-            functionName: 'init',
-            args: []
+            abi: PaymentAbi,
+            functionName: 'setDedicatedMsgSender',
+            args: [CFContractAddress]
           }),
-          to: contractAddress,
+          to: acc1.address,
         })
         this.addResult(`Hash de la première transaction: ${hash}`)
         
         // Deuxième transaction
         const hash2 = await walletClient.sendTransaction({
-          account: acc2,
+          account: acc1,
           data: encodeFunctionData({
-            abi,
-            functionName: 'sendMoney',
-            args: [parseEther("10"), acc2.address]
+            abi: CFAbi,
+            functionName: 'newSubscription',
+            args: [
+              zeroAddress,
+              parseEther("10"),
+              acc2.address,
+              60
+            ]
           }),
-          to: acc1.address,
+          to: CFContractAddress,
         })
         this.addResult(`Hash de la deuxième transaction: ${hash2}`)
         
@@ -107,7 +111,7 @@ export default {
         this.addResult(`Solde du compte 2: ${balance2} ETH`)
         
       } catch (error) {
-        this.addResult(`Erreur: ${error.message}`)
+        this.addResult(`Erreur: ${error.message}\n${error.stack}`)
         console.error(error)
       } finally {
         this.isLoading = false
