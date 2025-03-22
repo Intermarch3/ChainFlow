@@ -4,22 +4,23 @@ pragma solidity ^0.8.13;
 import {Test, console} from "forge-std/Test.sol";
 import {ChainflowContract, ChainflowPayment} from "../src/Chainflow.sol";
 
-contract CFTest is Test {
-    ChainflowContract public CF;
-    ChainflowPayment public CP;
+contract ChainFlowTests is Test {
+    ChainflowContract public CFContract;
+    ChainflowPayment public CFPayment;
 
     function setUp() public {
-        CP = new ChainflowPayment();
-        CF = new ChainflowContract(address(CP));
+        CFPayment = new ChainflowPayment();
+        CFContract = new ChainflowContract(address(CFPayment), address(0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0));
     }
 
-    function testNewSubscription() public {
-        CF.newSubscription(address(0), 0, address(0), 0);
-        uint256[] memory subs = CF.getMySubscriptions();
-        CF.subscriptions(0);
-        for (uint256 i = 0; i < subs.length; i++) {
-            CF.getSubscription(subs[i]);
-        }
+    function test_getPaymentContract() public view {
+        assertEq(address(CFPayment), address(CFContract.getPaymentContract()));
+    }
+
+    function test_setPaymentContract() public {
+        ChainflowPayment newPayment = new ChainflowPayment();
+        CFContract.setPaymentContract(address(newPayment));
+        assertEq(address(newPayment), address(CFContract.getPaymentContract()));
     }
 
     receive() external payable {}
