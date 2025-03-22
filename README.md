@@ -1,5 +1,5 @@
 # ChainFlow
-Abonnement récurrent blockchain utilisant l'EIP 7702 et Gelato
+Abonnement récurrent blockchain utilisant l'EIP 7702 et chainlink automation
 
 ## Installation
 
@@ -11,6 +11,7 @@ npm install
 ```shell
 cd contracts
 forge install
+npm install
 ```
 
 ## Usage
@@ -31,12 +32,7 @@ forge create src/Counter.sol:TestContract --private-key "0x59c6995e998f97a5a0044
 # this pk is an anvil dev account (add rpc url if needed)
 ```
 
-Automate address used : `0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0`
-OPS_PROXY_FACTORY address : `0x44bde1bccdD06119262f1fE441FBe7341EaaC185`
+wrapped eth sepolia address : `0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9`
+need to calculate the min value to fund the upkeep with a simulate call in the front.
 
-
-Commentaire gelato discord :
-- contracts/lib/automate/contracts/integrations/AutomateReady.sol:18 wrong OPS_PROXY_FACTORY address (need to find the one from the deployment folder)
-- https://docs.gelato.network/web3-services/web3-functions/understanding-web3-functions/create-a-web3-function-task/using-a-smart-contract#additional-info : link to example smart contract is broken
-- https://docs.gelato.network/web3-services/web3-functions/understanding-web3-functions/create-a-web3-function-task/using-a-smart-contract#using-a-smart-contract : full code link broken too
-- contracts/lib/automate/contracts/integrations/AutomateTaskCreator.sol:20 AutomateTaskCreator constructor call automate.taskTreasury() but this function doesn't exist anywhere in the codebase so any contract will fail to deploy
+if want to cancel the subscription and withdraw the upkeep funds, need to call the `cancelSubscription` in chainflow contract and `cancelUpkeep(uint256 id)` + `withdrawFunds(uint256 id, address to)` in the chainlink registery contract.
