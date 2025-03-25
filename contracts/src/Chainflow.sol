@@ -3,6 +3,7 @@ pragma solidity ^0.8.13;
 
 import { IERC20 } from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 import { AutomationCompatibleInterface } from '../node_modules/@chainlink/contracts/src/v0.8/automation/interfaces/AutomationCompatibleInterface.sol';
+import { IAutomationRegistryConsumer } from '../node_modules/@chainlink/contracts/src/v0.8/automation/interfaces/IAutomationRegistryConsumer.sol';
 
 // struct for automation registration params
 struct RegistrationParams {
@@ -16,7 +17,6 @@ struct RegistrationParams {
     bytes triggerConfig;
     bytes offchainConfig;
     uint96 amount;
-    IERC20 billingToken;
 }
 
 interface AutomationRegistrarInterface {
@@ -32,26 +32,26 @@ contract ChainflowContract is AutomationCompatibleInterface {
         uint256 interval;
         uint256 nextPayment;
         address token;
-        uint256 amount;
+        uint96 amount;
         address to;
         address from;
         uint256 upKeepId;
     }
 
-    address public wrappedNativeToken;
     address public immutable owner;
-    address public chainlinkRegistery;
+    IERC20 public linkToken;
+    IAutomationRegistryConsumer public chainlinkRegistery;
     AutomationRegistrarInterface public chainlinkRegistrar;
     ChainflowPayment public paymentContract;
     Subscription[] public subscriptions;
     mapping(address => uint256) public userNbSubs;
 
-    constructor(address _paymentContract, address _chainlinkRegistrar, address _wrappedNativeToken) {
-        wrappedNativeToken = _wrappedNativeToken;
+    constructor(address payable _paymentContract, address _chainlinkRegistrar, address _chainlinkRegistery, address _linkToken) {
         owner = msg.sender;
         chainlinkRegistrar = AutomationRegistrarInterface(_chainlinkRegistrar);
-        chainlinkRegistery = chainlinkRegistrar.getRegistry();
+        chainlinkRegistery = IAutomationRegistryConsumer(_chainlinkRegistery);
         paymentContract = ChainflowPayment(_paymentContract);
+        linkToken = IERC20(_linkToken);
     }
 
 
@@ -62,7 +62,7 @@ contract ChainflowContract is AutomationCompatibleInterface {
     //////////: AutomationCompatibleInterface :///////////////
 
     // change paymentContract implementation address
-    function setPaymentContract(address _paymentContract) public {
+    function setPaymentContract(address payable _paymentContract) public {
         require(msg.sender == owner, "Only owner can set payment contract");
         paymentContract = ChainflowPayment(_paymentContract);
     }
@@ -74,12 +74,12 @@ contract ChainflowContract is AutomationCompatibleInterface {
 
     function setChainlinkRegistery(address _chainlinkRegistery) public {
         require(msg.sender == owner, "Only owner can set chainlink registery");
-        chainlinkRegistery = _chainlinkRegistery;
+        chainlinkRegistery = IAutomationRegistryConsumer(_chainlinkRegistery);
     }
 
-    function setWrappedNativeToken(address _wrappedNativeToken) public {
-        require(msg.sender == owner, "Only owner can set wrapped native token");
-        wrappedNativeToken = _wrappedNativeToken;
+    function setLinkToken(address _linkToken) public {
+        require(msg.sender == owner, "Only owner can set link token");
+        linkToken = IERC20(_linkToken);
     }
 
 
@@ -92,14 +92,18 @@ contract ChainflowContract is AutomationCompatibleInterface {
     // create a subscription, register upkeep and add funds to upkeep
     function newSubscription(
         address token,
-        uint256 amount,
+        uint96 amount,
         address to,
         uint256 interval,
         uint256 startInterval,
-    ) external returns(bytes32) {
+        uint96 linkAmount
+    ) payable external returns(uint256) {
         require(amount > 0, "Amount must be greater than 0");
         require(interval > 0, "Interval must be greater than 0");
-        require(msg.value > 0, "You need to send some ether to pay for the upkeep");
+        require(linkAmount <= linkToken.allowance(msg.sender, address(this)),
+            "Not enough allowance for link token");
+        linkToken.transferFrom(msg.sender, address(this), linkAmount);
+        linkToken.approve(address(chainlinkRegistrar), linkAmount);
         Subscription memory sub;
         sub.active = true;
         sub.interval = interval;
@@ -108,26 +112,22 @@ contract ChainflowContract is AutomationCompatibleInterface {
         sub.amount = amount;
         sub.to = to;
         sub.from = msg.sender;
-        sub.upKeepId = _registerUpKeep(sub);
+        sub.upKeepId = _registerUpKeep(sub, linkAmount);
         subscriptions.push(sub);
         userNbSubs[msg.sender]++;
-
-        // add funds to upkeep
-        registery.addFunds(sub.upKeepId, msg.value);
         return sub.upKeepId;
     }
 
     // register upkeep for a subscription with msg.sender as upKeep owner
-    function _registerUpKeep(Subscription memory sub) internal returns(uint256){
+    function _registerUpKeep(Subscription memory sub, uint96 linkAmount) internal returns(uint256){
         RegistrationParams memory regParams;
         uint256 upKeepId;
 
         regParams.upkeepContract = address(this);
-        regParams.amount = sub.amount;
+        regParams.amount = linkAmount;
         regParams.adminAddress = address(sub.from);
-        regParams.gasLimit = 500000;
+        regParams.gasLimit = 800000;
         regParams.triggerType = 0;
-        regParams.billingToken = wrappedNativeToken;
         regParams.name = "ChainFlow Subscription";
         regParams.encryptedEmail = "";
         regParams.checkData = abi.encode(subscriptions.length);
@@ -149,17 +149,6 @@ contract ChainflowContract is AutomationCompatibleInterface {
         return subscriptions[index].upKeepId;
     }
 
-    // function called by chainlink automations to check if a subscription need to be paid
-    function checkUpkeep(bytes calldata checkData) external returns (bool upkeepNeeded, bytes memory performData) {
-        uint256 index = abi.decode(checkData, (uint256));
-        if (subscriptions.length <= index ||
-            !subscriptions[index].active ||
-            block.timestamp < subscriptions[index].nextPayment) {
-            return (false, "");
-        }
-        return (true, checkData);
-    }
-
     // function called by chainlink automations to pay a subscription
     function performUpkeep(bytes calldata performData) external {
         uint256 index = abi.decode(performData, (uint256));
@@ -168,12 +157,23 @@ contract ChainflowContract is AutomationCompatibleInterface {
         require(sub.active, "Subscription is not active");
         require(block.timestamp >= sub.nextPayment, "Not time to pay yet");
 
-        ChainflowPayment(sub.from).sendToken(
+        ChainflowPayment(payable(sub.from)).sendToken(
             subscriptions[index].token,
             subscriptions[index].amount,
             payable(subscriptions[index].to)
         );
         subscriptions[index].nextPayment += sub.interval;
+    }
+
+    // function called by chainlink automations to check if a subscription need to be paid
+    function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData) {
+        uint256 index = abi.decode(checkData, (uint256));
+        if (subscriptions.length <= index ||
+            !subscriptions[index].active ||
+            block.timestamp < subscriptions[index].nextPayment) {
+            return (false, "");
+        }
+        return (true, checkData);
     }
 
 

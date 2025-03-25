@@ -1,31 +1,21 @@
 export const PaymentAbi = [
     {
+    "type": "fallback",
+    "stateMutability": "payable"
+    },
+    {
+    "type": "receive",
+    "stateMutability": "payable"
+    },
+    {
     "type": "function",
-    "name": "sendERC20",
+    "name": "sendToken",
     "inputs": [
         {
         "name": "token",
         "type": "address",
         "internalType": "address"
         },
-        {
-        "name": "amount",
-        "type": "uint256",
-        "internalType": "uint256"
-        },
-        {
-        "name": "to",
-        "type": "address",
-        "internalType": "address"
-        }
-    ],
-    "outputs": [],
-    "stateMutability": "nonpayable"
-    },
-    {
-    "type": "function",
-    "name": "sendETH",
-    "inputs": [
         {
         "name": "amount",
         "type": "uint256",
@@ -55,4 +45,4 @@ export const PaymentAbi = [
     }
 ]
 
-export const PaymentContractAddress = '0x8464135c8F25Da09e49BC8782676a84730C318bC'
+export const PaymentContractAddress = '0xEC4a3DBCef2d57B0eB861092d584AFCAa832c0FD'

@@ -10,17 +10,17 @@ contract ChainFlowTests is Test {
 
     function setUp() public {
         CFPayment = new ChainflowPayment();
-        CFContract = new ChainflowContract(address(CFPayment), address(0x2A6C106ae13B558BB9E2Ec64Bd2f1f7BEFF3A5E0));
+        CFContract = new ChainflowContract(payable(address(CFPayment)), address(0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976), address(0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad), address(0x7b79995e5f793A07Bc00c21412e50Ecae098E7f9));
     }
 
     function test_getPaymentContract() public view {
         assertEq(address(CFPayment), address(CFContract.getPaymentContract()));
     }
 
-    function test_setPaymentContract() public {
-        ChainflowPayment newPayment = new ChainflowPayment();
-        CFContract.setPaymentContract(address(newPayment));
-        assertEq(address(newPayment), address(CFContract.getPaymentContract()));
+    function test_newSubscription() public {
+        vm.deal(address(this), 20 ether);
+        CFContract.newSubscription{value: 1 ether}(address(0), 10 ether, address(10), 20, 0);
+        assertEq(CFContract.getMySubscriptions()[0], 0, "bad index");
     }
 
     receive() external payable {}

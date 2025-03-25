@@ -14,12 +14,14 @@
 </template>
 
 <script>
-import { createWalletClient, http, encodeFunctionData, createPublicClient, formatEther, parseEther, zeroAddress } from 'viem'
-import { anvil } from 'viem/chains'
+import { http, createPublicClient, formatEther } from 'viem'
+import { encodeFunctionData, parseEther, createWalletClient } from 'viem'
+import { sepolia } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 import { eip7702Actions } from 'viem/experimental'
 import { PaymentAbi, PaymentContractAddress } from './contracts/PaymentContract'
 import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
+import { LinkTokenABI, LinkTokenAddress } from './contracts/LinkToken'
 
 export default {
   name: 'App',
@@ -43,58 +45,75 @@ export default {
       try {
         // Création des clients
         const walletClient = createWalletClient({
-          chain: anvil,
+          chain: sepolia,
           transport: http(),
         }).extend(eip7702Actions())
         
         const publicClient = createPublicClient({
-          chain: anvil,
+          chain: sepolia,
           transport: http(),
         })
         
         // Configuration des comptes
-        const acc1 = privateKeyToAccount('0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80')
-        const acc2 = privateKeyToAccount('0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d')
+        const addr1 = "0x95464DF912299FCe8551B23199d3b30925e3D8FF"
+        const acc2 = privateKeyToAccount('')
         
-        this.addResult(`Compte 1: ${acc1.address}`)
+        this.addResult(`Compte 1: ${addr1}`)
         this.addResult(`Compte 2: ${acc2.address}`)
         
         // Signature de l'autorisation (! Attention nonce)
         const authorization = await walletClient.signAuthorization({
-          account: acc1,
+          account: acc2,
           contractAddress: PaymentContractAddress,
         })
         this.addResult(`Autorisation signée: ${this.safejsonStringify(authorization)}`)
         
-        // Première transaction
+        // // Première transaction
         const hash = await walletClient.sendTransaction({
-          account: acc1,
+          account: acc2,
           authorizationList: [authorization],
           data: encodeFunctionData({
             abi: PaymentAbi,
             functionName: 'setDedicatedMsgSender',
             args: [CFContractAddress]
           }),
-          to: acc1.address,
+          to: acc2.address,
         })
         this.addResult(`Hash de la première transaction: ${hash}`)
         
-        // Deuxième transaction
+        // set link token allowance
         const hash2 = await walletClient.sendTransaction({
-          account: acc1,
+          account: acc2,
+          data: encodeFunctionData({
+            abi: LinkTokenABI,
+            functionName: 'approve',
+            args: [
+              CFContractAddress,
+              parseEther("5")
+            ]
+          }),
+          to: LinkTokenAddress,
+        })
+        this.addResult(`Hash de la deuxieme transaction: ${hash2}`)
+
+        // Deuxième transaction
+        const hash3 = await walletClient.sendTransaction({
+          account: acc2,
           data: encodeFunctionData({
             abi: CFAbi,
             functionName: 'newSubscription',
             args: [
-              zeroAddress,
-              parseEther("10"),
-              acc2.address,
-              60
+            "0x0000000000000000000000000000000000000000",
+            parseEther("0.05"),
+            addr1,
+            45,
+            10,
+            parseEther("5")
             ]
           }),
           to: CFContractAddress,
         })
-        this.addResult(`Hash de la deuxième transaction: ${hash2}`)
+        this.addResult(`Hash de la troisieme transaction: ${hash3}`)
         
         // Vérification des soldes
         const getETHBalance = async (publicClient, address) => {
@@ -104,7 +123,7 @@ export default {
           return formatEther(balance)
         }
         
-        const balance1 = await getETHBalance(publicClient, acc1.address)
+        const balance1 = await getETHBalance(publicClient, addr1)
         const balance2 = await getETHBalance(publicClient, acc2.address)
         
         this.addResult(`Solde du compte 1: ${balance1} ETH`)
