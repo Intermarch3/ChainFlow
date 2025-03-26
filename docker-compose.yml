@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  chainflow-app:
+    image: node:18-alpine
+    container_name: chainflow-app
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    ports:
+      - "8080:8080"
+    command: >
+      sh -c "npm install &&
+             npm run serve -- --skip-lint"
+    environment:
+      - NODE_ENV=development
+      - CHOKIDAR_USEPOLLING=true  # Pour permettre le hot-reload dans Docker
+      - ESLINT_NO_DEV_ERRORS=true # Désactiver les erreurs ESLint en dev
+    restart: unless-stopped
