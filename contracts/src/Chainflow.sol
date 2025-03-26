@@ -42,6 +42,7 @@ contract ChainflowContract is AutomationCompatibleInterface {
         uint96 nbPaymentsDone;
     }
 
+    string constant public version = "Chainflow Contract 1.0";
     address public immutable owner;
     IERC20 public linkToken;
     IAutomationRegistryConsumer public chainlinkRegistery;
@@ -218,7 +219,7 @@ contract ChainflowContract is AutomationCompatibleInterface {
             "You are not the owner of this subscription");
         require(subscriptions[index].active, "Subscription is not active");
         subscriptions[index].active = false;
-        userNbSubs[msg.sender]--;
+        userNbSubs[msg.sender] -= 1;
         emit ChainflowSubscriptionCanceled(msg.sender, index, block.timestamp);
         return subscriptions[index].upKeepId;
     }
@@ -241,7 +242,7 @@ contract ChainflowContract is AutomationCompatibleInterface {
         subscriptions[index].nbPaymentsDone++;
         if (subscriptions[index].nbPaymentsDone == subscriptions[index].nbPayments) {
             subscriptions[index].active = false;
-            userNbSubs[msg.sender]--;
+            userNbSubs[subscriptions[index].from] -= 1;
             emit ChainflowSubscriptionLastPayment(sub.from, index, block.timestamp);
         }
     }
@@ -271,6 +272,7 @@ contract ChainflowContract is AutomationCompatibleInterface {
 
     // get list of index for each subscriptions msg.sender have
     function getMySubscriptions(address user) external view returns (uint256[] memory) {
+        if (userNbSubs[user] == 0) return new uint256[](0);
         uint256[] memory mySubs = new uint256[](userNbSubs[user]);
         uint8 j = 0;
 
@@ -301,9 +303,20 @@ contract ChainflowContract is AutomationCompatibleInterface {
 contract ChainflowPayment {
     bytes32 private constant _DEDICATED_ADDR_SLOT = 
         bytes32(uint256(keccak256("chainflow.dedicatedMsgSender")) - 1);
-    string constant public version = "Chainflow Payment 0.2";
+    string constant public chainflowPaymentVersion = "Chainflow Payment 1.0";
 
-    event ChainflowPaymentSent(address token, uint256 amount, address from, address to, uint256 timestamp);
+    event ChainflowPaymentSent(
+        address token,
+        uint256 amount,
+        address from,
+        address to,
+        uint256 timestamp
+    );
+
+    event ChainflowPaymentDedicatedMsgSenderSet(
+        address wallet,
+        address dedicatedMsgSender
+    );
 
     modifier onlyDedicatedMsgSender() {
         address dedicatedMsgSender;
@@ -323,6 +336,7 @@ contract ChainflowPayment {
         assembly {
             sstore(slot, dedicatedMsgSender)
         }
+        emit ChainflowPaymentDedicatedMsgSenderSet(msg.sender, dedicatedMsgSender);
     }
 
     // make a payment (only dedicatedMsgSender)

@@ -5,129 +5,22 @@ import {Test, console} from "forge-std/Test.sol";
 import {ChainflowContract, ChainflowPayment} from "../src/Chainflow.sol";
 import {IERC20} from "../lib/openzeppelin-contracts/contracts/token/ERC20/IERC20.sol";
 
-// Mock du token ERC20 pour les tests
-contract MockERC20 is IERC20 {
-    mapping(address => uint256) private _balances;
-    mapping(address => mapping(address => uint256)) private _allowances;
-    uint256 private _totalSupply;
-    string private _name;
-    string private _symbol;
+import {MockERC20} from "./Mocks.sol";
+import {MockAutomationRegistrar} from "./Mocks.sol";
+import {MockAutomationRegistry} from "./Mocks.sol";
 
-    constructor(string memory name_, string memory symbol_) {
-        _name = name_;
-        _symbol = symbol_;
-        _mint(msg.sender, 1000000 * 10**18);
-    }
-
-    function name() public view virtual returns (string memory) {
-        return _name;
-    }
-
-    function symbol() public view virtual returns (string memory) {
-        return _symbol;
-    }
-
-    function decimals() public view virtual returns (uint8) {
-        return 18;
-    }
-
-    function totalSupply() public view virtual override returns (uint256) {
-        return _totalSupply;
-    }
-
-    function balanceOf(address account) public view virtual override returns (uint256) {
-        return _balances[account];
-    }
-
-    function transfer(address to, uint256 amount) public virtual override returns (bool) {
-        _transfer(msg.sender, to, amount);
-        return true;
-    }
-
-    function allowance(address owner, address spender) public view virtual override returns (uint256) {
-        return _allowances[owner][spender];
-    }
-
-    function approve(address spender, uint256 amount) public virtual override returns (bool) {
-        _approve(msg.sender, spender, amount);
-        return true;
-    }
-
-    function transferFrom(address from, address spender, uint256 amount) public virtual override returns (bool) {
-        _spendAllowance(from, msg.sender, amount);
-        _transfer(from, spender, amount);
-        return true;
-    }
-
-    function _transfer(address from, address to, uint256 amount) internal virtual {
-        require(from != address(0), "ERC20: transfer from the zero address");
-        require(to != address(0), "ERC20: transfer to the zero address");
-
-        _beforeTokenTransfer(from, to, amount);
-
-        uint256 fromBalance = _balances[from];
-        require(fromBalance >= amount, "ERC20: transfer amount exceeds balance");
-        unchecked {
-            _balances[from] = fromBalance - amount;
-        }
-        _balances[to] += amount;
-
-        emit Transfer(from, to, amount);
-
-        _afterTokenTransfer(from, to, amount);
-    }
-
-    function _mint(address account, uint256 amount) internal virtual {
-        require(account != address(0), "ERC20: mint to the zero address");
-
-        _beforeTokenTransfer(address(0), account, amount);
-
-        _totalSupply += amount;
-        _balances[account] += amount;
-        emit Transfer(address(0), account, amount);
-
-        _afterTokenTransfer(address(0), account, amount);
-    }
-
-    function _approve(address owner, address spender, uint256 amount) internal virtual {
-        require(owner != address(0), "ERC20: approve from the zero address");
-        require(spender != address(0), "ERC20: approve to the zero address");
-
-        _allowances[owner][spender] = amount;
-        emit Approval(owner, spender, amount);
-    }
-
-    function _spendAllowance(address owner, address spender, uint256 amount) internal virtual {
-        uint256 currentAllowance = allowance(owner, spender);
-        if (currentAllowance != type(uint256).max) {
-            require(currentAllowance >= amount, "ERC20: insufficient allowance");
-            unchecked {
-                _approve(owner, spender, currentAllowance - amount);
-            }
-        }
-    }
-
-    function _beforeTokenTransfer(address from, address to, uint256 amount) internal virtual {}
-    function _afterTokenTransfer(address from, address to, uint256 amount) internal virtual {}
+struct RegistrationParams {
+    string name;
+    bytes encryptedEmail;
+    address upkeepContract;
+    uint32 gasLimit;
+    address adminAddress;
+    uint8 triggerType;
+    bytes checkData;
+    bytes triggerConfig;
+    bytes offchainConfig;
+    uint96 amount;
 }
-
-// Contrats mock pour les interfaces Chainlink pour les tests
-contract MockAutomationRegistrar {
-    uint256 private _upkeepCounter = 0;
-
-    function registerUpkeep(
-        RegistrationParams calldata requestParams
-    ) external returns (uint256) {
-        _upkeepCounter++;
-        return _upkeepCounter;
-    }
-}
-
-contract MockAutomationRegistry {
-    function cancelUpkeep(uint256 id) external {}
-    function withdrawFunds(uint256 id, address to) external {}
-}
-
 contract ChainFlowTests is Test {
     ChainflowContract public CFContract;
     ChainflowPayment public CFPayment;
@@ -141,11 +34,6 @@ contract ChainFlowTests is Test {
     address public user2 = address(0x2);
     address public recipient = address(0x3);
     address private constant ZERO_ADDRESS = address(0);
-
-    // Adresse réelles de Sepolia (à utiliser si nécessaire)
-    address public constant SEPOLIA_LINK_TOKEN = 0x779877a7b0d9e8603169ddbd7836e478b4624789;
-    address public constant SEPOLIA_REGISTRAR = 0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976;
-    address public constant SEPOLIA_REGISTRY = 0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad;
 
     event ChainflowNewSubscription(
         address indexed from,
@@ -198,6 +86,7 @@ contract ChainFlowTests is Test {
         mockRegistry = new MockAutomationRegistry();
 
         // Déploiement des contrats à tester
+        user1 = address(new ChainflowPayment());
         CFPayment = new ChainflowPayment();
         CFContract = new ChainflowContract(
             payable(address(CFPayment)),
@@ -775,21 +664,20 @@ contract ChainFlowTests is Test {
         _createEthSubscription();
         
         // S'assurer que CFPayment a des fonds ETH pour effectuer le paiement
-        vm.deal(user1, 10 ether);
-        vm.startPrank(user1);
-        // Envoyer des ETH au contrat de paiement de l'utilisateur (user1 est l'adresse "from" de l'abonnement)
-        (bool sent, ) = payable(user1).call{value: 5 ether}("");
-        require(sent, "Failed to send ETH");
-        vm.stopPrank();
+        vm.deal(address(CFPayment), 10 ether);
         
         // Avancer le temps au-delà de l'intervalle de début
         vm.warp(block.timestamp + 15);
         
         // Encoder les données pour performUpkeep
         bytes memory performData = abi.encode(0); // index 0
+        vm.startPrank(user1);
+        ChainflowPayment(payable(user1)).setDedicatedMsgSender(address(CFContract));
+        vm.stopPrank();
         
         // Exécuter performUpkeep
         CFContract.performUpkeep(performData);
+
         
         // Vérifier que l'abonnement a été mis à jour
         vm.startPrank(user1);
@@ -810,6 +698,9 @@ contract ChainFlowTests is Test {
         
         // Encoder les données pour performUpkeep
         bytes memory performData = abi.encode(0); // index 0
+        vm.startPrank(user1);
+        ChainflowPayment(payable(user1)).setDedicatedMsgSender(address(CFContract));
+        vm.stopPrank();
         
         // Exécuter performUpkeep
         CFContract.performUpkeep(performData);
@@ -846,18 +737,21 @@ contract ChainFlowTests is Test {
         bytes memory performData = abi.encode(0); // index 0
         
         // Vérifier l'événement de dernier paiement
+        vm.startPrank(user1);
+        ChainflowPayment(payable(user1)).setDedicatedMsgSender(address(CFContract));
+        assertEq(CFContract.userNbSubs(user1), 1);
+
         vm.expectEmit(true, false, false, false);
-        emit ChainflowSubscriptionLastPayment(user1, 0, block.timestamp);
+        emit ChainflowSubscriptionLastPayment(address(user1), 0, block.timestamp);
         
         // Exécuter performUpkeep
         CFContract.performUpkeep(performData);
         
         // Vérifier que l'abonnement a été désactivé
-        vm.startPrank(user1);
+        assertEq(CFContract.userNbSubs(user1), 0);
         ChainflowContract.Subscription memory sub = CFContract.getSubscription(0);
         assertEq(sub.nbPaymentsDone, 1);
         assertEq(sub.active, false); // Devrait être désactivé après le dernier paiement
-        
         // Vérifier que l'abonnement n'apparaît plus dans getMySubscriptions
         uint256[] memory subscriptions = CFContract.getMySubscriptions(user1);
         assertEq(subscriptions.length, 0);
