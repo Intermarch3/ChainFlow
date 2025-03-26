@@ -192,7 +192,7 @@ contract ChainFlowTests is Test {
     //                                                      //
     //////////////////////////////////////////////////////////
 
-    function test_constructor() public {
+    function test_constructor() public view {
         assertEq(address(CFContract.owner()), address(this));
         assertEq(address(CFContract.linkToken()), address(mockLink));
         assertEq(address(CFContract.chainlinkRegistery()), address(mockRegistry));
@@ -200,7 +200,7 @@ contract ChainFlowTests is Test {
         assertEq(address(CFContract.getPaymentContract()), address(CFPayment));
     }
 
-    function test_getPaymentContract() public {
+    function test_getPaymentContract() public view {
         assertEq(address(CFPayment), CFContract.getPaymentContract());
     }
 

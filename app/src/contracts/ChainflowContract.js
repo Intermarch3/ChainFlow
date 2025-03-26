@@ -105,7 +105,13 @@ export const CFAbi = [
     {
     "type": "function",
     "name": "getMySubscriptions",
-    "inputs": [],
+    "inputs": [
+        {
+        "name": "user",
+        "type": "address",
+        "internalType": "address"
+        }
+    ],
     "outputs": [
         {
         "name": "",
@@ -150,6 +156,11 @@ export const CFAbi = [
             "internalType": "bool"
             },
             {
+            "name": "paused",
+            "type": "bool",
+            "internalType": "bool"
+            },
+            {
             "name": "interval",
             "type": "uint256",
             "internalType": "uint256"
@@ -183,6 +194,21 @@ export const CFAbi = [
             "name": "upKeepId",
             "type": "uint256",
             "internalType": "uint256"
+            },
+            {
+            "name": "lastPaymentTimestamp",
+            "type": "uint256",
+            "internalType": "uint256"
+            },
+            {
+            "name": "nbPayments",
+            "type": "uint96",
+            "internalType": "uint96"
+            },
+            {
+            "name": "nbPaymentsDone",
+            "type": "uint96",
+            "internalType": "uint96"
             }
         ]
         }
@@ -235,6 +261,11 @@ export const CFAbi = [
         "name": "linkAmount",
         "type": "uint96",
         "internalType": "uint96"
+        },
+        {
+        "name": "nbPayments",
+        "type": "uint96",
+        "internalType": "uint96"
         }
     ],
     "outputs": [
@@ -261,6 +292,25 @@ export const CFAbi = [
     },
     {
     "type": "function",
+    "name": "pauseSubscription",
+    "inputs": [
+        {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+        }
+    ],
+    "outputs": [
+        {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+        }
+    ],
+    "stateMutability": "nonpayable"
+    },
+    {
+    "type": "function",
     "name": "paymentContract",
     "inputs": [],
     "outputs": [
@@ -283,6 +333,25 @@ export const CFAbi = [
         }
     ],
     "outputs": [],
+    "stateMutability": "nonpayable"
+    },
+    {
+    "type": "function",
+    "name": "resumeSubscription",
+    "inputs": [
+        {
+        "name": "index",
+        "type": "uint256",
+        "internalType": "uint256"
+        }
+    ],
+    "outputs": [
+        {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+        }
+    ],
     "stateMutability": "nonpayable"
     },
     {
@@ -354,6 +423,11 @@ export const CFAbi = [
         "internalType": "bool"
         },
         {
+        "name": "paused",
+        "type": "bool",
+        "internalType": "bool"
+        },
+        {
         "name": "interval",
         "type": "uint256",
         "internalType": "uint256"
@@ -387,6 +461,21 @@ export const CFAbi = [
         "name": "upKeepId",
         "type": "uint256",
         "internalType": "uint256"
+        },
+        {
+        "name": "lastPaymentTimestamp",
+        "type": "uint256",
+        "internalType": "uint256"
+        },
+        {
+        "name": "nbPayments",
+        "type": "uint96",
+        "internalType": "uint96"
+        },
+        {
+        "name": "nbPaymentsDone",
+        "type": "uint96",
+        "internalType": "uint96"
         }
     ],
     "stateMutability": "view"
@@ -409,7 +498,175 @@ export const CFAbi = [
         }
     ],
     "stateMutability": "view"
+    },
+    {
+    "type": "function",
+    "name": "version",
+    "inputs": [],
+    "outputs": [
+        {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+        }
+    ],
+    "stateMutability": "view"
+    },
+    {
+    "type": "event",
+    "name": "ChainflowNewSubscription",
+    "inputs": [
+        {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "token",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "index",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "amount",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
+        },
+        {
+        "name": "startInterval",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "interval",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "nbPayments",
+        "type": "uint96",
+        "indexed": false,
+        "internalType": "uint96"
+        }
+    ],
+    "anonymous": false
+    },
+    {
+    "type": "event",
+    "name": "ChainflowSubscriptionCanceled",
+    "inputs": [
+        {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "index",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        }
+    ],
+    "anonymous": false
+    },
+    {
+    "type": "event",
+    "name": "ChainflowSubscriptionLastPayment",
+    "inputs": [
+        {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "index",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        }
+    ],
+    "anonymous": false
+    },
+    {
+    "type": "event",
+    "name": "ChainflowSubscriptionPaused",
+    "inputs": [
+        {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "index",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        }
+    ],
+    "anonymous": false
+    },
+    {
+    "type": "event",
+    "name": "ChainflowSubscriptionResumed",
+    "inputs": [
+        {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+        },
+        {
+        "name": "index",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        }
+    ],
+    "anonymous": false
     }
 ]
 
-export const CFContractAddress = '0xaD63C0c9cAFeC5c9b4b14171899cf945b4765a44'
+export const CFContractAddress = '0x8a910720406Ce2109FAb303BdEbeD6a2f961D81E'

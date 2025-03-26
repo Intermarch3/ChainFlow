@@ -36,8 +36,14 @@ forge create src/Counter.sol:TestContract --private-key "0x59c6995e998f97a5a0044
 link token sepolia address : `0x779877a7b0d9e8603169ddbd7836e478b4624789`
 registrar sepolia address : `0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976`
 registry sepolia address : `0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad`
+
+V0.1:
 ChainflowContract sepolia address : `0xaD63C0c9cAFeC5c9b4b14171899cf945b4765a44`
 ChainflowPayment sepolia address : `0xEC4a3DBCef2d57B0eB861092d584AFCAa832c0FD`
+
+V1.0:
+ChainflowContract sepolia address : `0x8a910720406Ce2109FAb303BdEbeD6a2f961D81E`
+ChainflowPayment sepolia address : `0xd55D633Df41244Fa084a77f537Bd7017f38f2e6d`
 
 #### TODO :
 - [ ] need to calculate the min value to fund the upkeep with a simulate call in the front.

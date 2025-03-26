@@ -9,6 +9,19 @@ export const PaymentAbi = [
     },
     {
     "type": "function",
+    "name": "chainflowPaymentVersion",
+    "inputs": [],
+    "outputs": [
+        {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+        }
+    ],
+    "stateMutability": "view"
+    },
+    {
+    "type": "function",
     "name": "sendToken",
     "inputs": [
         {
@@ -42,6 +55,62 @@ export const PaymentAbi = [
     ],
     "outputs": [],
     "stateMutability": "nonpayable"
+    },
+    {
+    "type": "event",
+    "name": "ChainflowPaymentDedicatedMsgSenderSet",
+    "inputs": [
+        {
+        "name": "wallet",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+        },
+        {
+        "name": "dedicatedMsgSender",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+        }
+    ],
+    "anonymous": false
+    },
+    {
+    "type": "event",
+    "name": "ChainflowPaymentSent",
+    "inputs": [
+        {
+        "name": "token",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+        },
+        {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        },
+        {
+        "name": "from",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+        },
+        {
+        "name": "to",
+        "type": "address",
+        "indexed": false,
+        "internalType": "address"
+        },
+        {
+        "name": "timestamp",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+        }
+    ],
+    "anonymous": false
     }
 ]
 
