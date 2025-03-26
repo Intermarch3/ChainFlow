@@ -91,7 +91,7 @@
 </template>
 
 <script>
-import { createPublicClient, createWalletClient, http, formatEther, parseEther, formatUnits, encodeFunctionData } from 'viem'
+import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeFunctionData, zeroAddress } from 'viem'
 import { sepolia } from 'viem/chains'
 import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
 import { LinkTokenABI, LinkTokenAddress } from './contracts/LinkToken'
@@ -102,8 +102,6 @@ import { eip7702Actions } from 'viem/experimental'
 import SubscriptionModal from './components/SubscriptionModal.vue'
 import SubscriptionDetailsModal from './components/SubscriptionDetailsModal.vue'
 import TransactionsModal from './components/TransactionsModal.vue'
-
-const NATIVE_TOKEN_ADDRESS = "0x0000000000000000000000000000000000000000"
 
 export default {
   name: 'App',
@@ -253,7 +251,7 @@ export default {
     
     // Vérifier si c'est un token natif (ETH)
     isNativeToken(tokenAddress) {
-      return tokenAddress.toLowerCase() === NATIVE_TOKEN_ADDRESS.toLowerCase()
+      return tokenAddress.toLowerCase() === zeroAddress.toLowerCase()
     },
     
     // Formater les intervalles en texte humain
@@ -319,7 +317,7 @@ export default {
       this.pendingTransactions = [
         {
           id: 1,
-          name: 'Déploiement du contrat de paiement',
+          name: 'Transformation du wallet en contrat de paiement',
           description: 'Autoriser le contrat ChainFlow à effectuer des paiements',
           status: 'pending',
           hash: null
