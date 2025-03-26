@@ -2,9 +2,21 @@
   <div>
     <div class="blockchain-section">
       <button @click="executeBlockchainScript" :disabled="isLoading">
-        {{ isLoading ? 'Exécution en cours...' : 'Exécuter le script blockchain' }}
+        {{ isLoading ? 'Exécution en cours...' : 'Exécuter le script entier' }}
       </button>
-      
+      <button @click="executeWalletSetup" :disabled="isLoading">
+        {{ isLoading ? 'Exécution en cours...' : 'Configurer le portefeuille' }}
+      </button>
+      <button @click="executeApprove" :disabled="isLoading">
+        {{ isLoading ? 'Exécution en cours...' : 'Approuver le jeton LINK' }}
+      </button>
+      <button @click="executeNewSubscription" :disabled="isLoading">
+        {{ isLoading ? 'Exécution en cours...' : 'Créer un nouvel abonnement' }}
+      </button>
+      <button @click="executeGetETHBalance" :disabled="isLoading">
+        {{ isLoading ? 'Exécution en cours...' : 'Obtenir les solde ETH' }}
+      </button>
+      <div v-if="isLoading">Chargement...</div>
       <div v-if="results.length > 0" class="results">
         <h3>Résultats:</h3>
         <pre>{{ results.join('\n') }}</pre>
@@ -14,21 +26,37 @@
 </template>
 
 <script>
-import { http, createPublicClient, formatEther } from 'viem'
-import { encodeFunctionData, parseEther, createWalletClient } from 'viem'
+import { http, createPublicClient, createWalletClient, zeroAddress } from 'viem'
 import { sepolia } from 'viem/chains'
 import { privateKeyToAccount } from 'viem/accounts'
 import { eip7702Actions } from 'viem/experimental'
-import { PaymentAbi, PaymentContractAddress } from './contracts/PaymentContract'
-import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
-import { LinkTokenABI, LinkTokenAddress } from './contracts/LinkToken'
+import { CFContractAddress } from './contracts/ChainflowContract'
+import { approveLinkToken, newSubscription, setWalletToPaymentContract, getETHBalance } from './scripts'
+
+const walletClient = createWalletClient({
+  chain: sepolia,
+  transport: http(),
+}).extend(eip7702Actions())
+
+const publicClient = createPublicClient({
+  chain: sepolia,
+  transport: http(),
+})
+
+// Configuration des comptes
+const addr1 = "0x95464DF912299FCe8551B23199d3b30925e3D8FF"
+const acc2 = privateKeyToAccount('0xce79c4c92de28296bcc6b3a0900079679c86144fddedf8414772562d1f29e9f9')
 
 export default {
   name: 'App',
   data() {
     return {
       isLoading: false,
-      results: []
+      results: [],
+      wc: walletClient,
+      pc: publicClient,
+      addr1: addr1,
+      acc2: acc2
     }
   },
   methods: {
@@ -56,73 +84,25 @@ export default {
         
         // Configuration des comptes
         const addr1 = "0x95464DF912299FCe8551B23199d3b30925e3D8FF"
-        const acc2 = privateKeyToAccount('')
+        const acc2 = privateKeyToAccount('0xce79c4c92de28296bcc6b3a0900079679c86144fddedf8414772562d1f29e9f9')
         
         this.addResult(`Compte 1: ${addr1}`)
         this.addResult(`Compte 2: ${acc2.address}`)
         
-        // Signature de l'autorisation (! Attention nonce)
-        const authorization = await walletClient.signAuthorization({
-          account: acc2,
-          contractAddress: PaymentContractAddress,
-        })
-        this.addResult(`Autorisation signée: ${this.safejsonStringify(authorization)}`)
-        
-        // // Première transaction
-        const hash = await walletClient.sendTransaction({
-          account: acc2,
-          authorizationList: [authorization],
-          data: encodeFunctionData({
-            abi: PaymentAbi,
-            functionName: 'setDedicatedMsgSender',
-            args: [CFContractAddress]
-          }),
-          to: acc2.address,
-        })
+        // setup wallet to payment contract
+        const [auth, hash] = await setWalletToPaymentContract(walletClient, acc2)
+        this;this.addResult(`Authorization: ${auth}`)
         this.addResult(`Hash de la première transaction: ${hash}`)
         
         // set link token allowance
-        const hash2 = await walletClient.sendTransaction({
-          account: acc2,
-          data: encodeFunctionData({
-            abi: LinkTokenABI,
-            functionName: 'approve',
-            args: [
-              CFContractAddress,
-              parseEther("5")
-            ]
-          }),
-          to: LinkTokenAddress,
-        })
+        const hash2 = await approveLinkToken(walletClient, acc2, "5", CFContractAddress)
         this.addResult(`Hash de la deuxieme transaction: ${hash2}`)
 
-        // Deuxième transaction
-        const hash3 = await walletClient.sendTransaction({
-          account: acc2,
-          data: encodeFunctionData({
-            abi: CFAbi,
-            functionName: 'newSubscription',
-            args: [
-            "0x0000000000000000000000000000000000000000",
-            parseEther("0.05"),
-            addr1,
-            45,
-            10,
-            parseEther("5")
-            ]
-          }),
-          to: CFContractAddress,
-        })
+        // create subscription
+        const hash3 = await newSubscription(walletClient, acc2, "0.05", addr1, zeroAddress, "5", "30")
         this.addResult(`Hash de la troisieme transaction: ${hash3}`)
         
         // Vérification des soldes
-        const getETHBalance = async (publicClient, address) => {
-          const balance = await publicClient.getBalance({ 
-            address: address,
-          })
-          return formatEther(balance)
-        }
-        
         const balance1 = await getETHBalance(publicClient, addr1)
         const balance2 = await getETHBalance(publicClient, acc2.address)
         
@@ -136,7 +116,66 @@ export default {
         this.isLoading = false
       }
     },
-    
+    async executeApprove() {
+      this.isLoading = true
+      this.results = []
+      try {
+        // set link token allowance
+        const hash2 = await approveLinkToken(walletClient, acc2, "5", CFContractAddress)
+        this.addResult(`Hash de la deuxieme transaction: ${hash2}`)
+      } catch (error) {
+        this.addResult(`Erreur: ${error.message}\n${error.stack}`)
+        console.error(error)
+      } finally {
+        this.isLoading = false
+      }
+    },
+    async executeNewSubscription() {
+      this.isLoading = true
+      this.results = []
+      try {
+        // create subscription
+        const hash3 = await newSubscription(walletClient, acc2, "0.05", addr1, zeroAddress, "5", "30")
+        this.addResult(`Hash de la troisieme transaction: ${hash3}`)
+      } catch (error) {
+        this.addResult(`Erreur: ${error.message}\n${error.stack}`)
+        console.error(error)
+      } finally {
+        this.isLoading = false
+      }
+    },
+    async executeGetETHBalance() {
+      this.isLoading = true
+      this.results = []
+      try {
+        // Vérification des soldes
+        const balance1 = await getETHBalance(publicClient, addr1)
+        const balance2 = await getETHBalance(publicClient, acc2.address)
+        
+        this.addResult(`Solde du compte 1: ${balance1} ETH`)
+        this.addResult(`Solde du compte 2: ${balance2} ETH`)
+      } catch (error) {
+        this.addResult(`Erreur: ${error.message}\n${error.stack}`)
+        console.error(error)
+      } finally {
+        this.isLoading = false
+      }
+    },
+    async executeWalletSetup() {
+      this.isLoading = true
+      this.results = []
+      try {
+        // setup wallet to payment contract
+        const [auth, hash] = await setWalletToPaymentContract(walletClient, acc2)
+        this.addResult(`Authorization: ${auth}`)
+        this.addResult(`Hash de la première transaction: ${hash}`)
+      } catch (error) {
+        this.addResult(`Erreur: ${error.message}\n${error.stack}`)
+        console.error(error)
+      } finally {
+        this.isLoading = false
+      }
+    },
     addResult(message) {
       this.results.push(message)
       console.log(message)
@@ -160,6 +199,7 @@ export default {
 }
 
 button {
+  margin: 20px;
   background-color: #42b983;
   color: white;
   padding: 10px 20px;
