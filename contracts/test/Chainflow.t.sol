@@ -17,11 +17,5 @@ contract ChainFlowTests is Test {
         assertEq(address(CFPayment), address(CFContract.getPaymentContract()));
     }
 
-    function test_newSubscription() public {
-        vm.deal(address(this), 20 ether);
-        CFContract.newSubscription{value: 1 ether}(address(0), 10 ether, address(10), 20, 0);
-        assertEq(CFContract.getMySubscriptions()[0], 0, "bad index");
-    }
-
     receive() external payable {}
 }

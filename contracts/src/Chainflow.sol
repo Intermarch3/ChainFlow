@@ -29,6 +29,7 @@ interface AutomationRegistrarInterface {
 contract ChainflowContract is AutomationCompatibleInterface {
     struct Subscription {
         bool active;
+        bool paused;
         uint256 interval;
         uint256 nextPayment;
         address token;
@@ -36,6 +37,9 @@ contract ChainflowContract is AutomationCompatibleInterface {
         address to;
         address from;
         uint256 upKeepId;
+        uint256 lastPaymentTimestamp;
+        uint96 nbPayments;
+        uint96 nbPaymentsDone;
     }
 
     address public immutable owner;
@@ -53,6 +57,47 @@ contract ChainflowContract is AutomationCompatibleInterface {
         paymentContract = ChainflowPayment(_paymentContract);
         linkToken = IERC20(_linkToken);
     }
+
+    //////////////////////////////////////////////////////////
+    //                                                      //
+    //                        Events                        //
+    //                                                      //
+    //////////////////////////////////////////////////////////
+
+    event ChainflowNewSubscription(
+        address indexed from,
+        address indexed to,
+        address indexed token,
+        uint256 index,
+        uint96 amount,
+        uint256 startInterval,
+        uint256 interval,
+        uint96 nbPayments
+    );
+
+    event ChainflowSubscriptionLastPayment(
+        address indexed from,
+        uint256 index,
+        uint256 timestamp
+    );
+
+    event ChainflowSubscriptionCanceled(
+        address indexed from,
+        uint256 index,
+        uint256 timestamp
+    );
+
+    event ChainflowSubscriptionPaused(
+        address indexed from,
+        uint256 index,
+        uint256 timestamp
+    );
+
+    event ChainflowSubscriptionResumed(
+        address indexed from,
+        uint256 index,
+        uint256 timestamp
+    );
 
 
     //////////////////////////////////////////////////////////
@@ -96,7 +141,8 @@ contract ChainflowContract is AutomationCompatibleInterface {
         address to,
         uint256 interval,
         uint256 startInterval,
-        uint96 linkAmount
+        uint96 linkAmount,
+        uint96 nbPayments
     ) payable external returns(uint256) {
         require(amount > 0, "Amount must be greater than 0");
         require(interval > 0, "Interval must be greater than 0");
@@ -112,9 +158,11 @@ contract ChainflowContract is AutomationCompatibleInterface {
         sub.amount = amount;
         sub.to = to;
         sub.from = msg.sender;
+        sub.nbPayments = nbPayments;
         sub.upKeepId = _registerUpKeep(sub, linkAmount);
         subscriptions.push(sub);
         userNbSubs[msg.sender]++;
+        emit ChainflowNewSubscription(msg.sender, to, token, subscriptions.length - 1, amount, startInterval, interval, nbPayments);
         return sub.upKeepId;
     }
 
@@ -139,13 +187,39 @@ contract ChainflowContract is AutomationCompatibleInterface {
         return upKeepId;
     }
 
+    // pause a subscription (upKeep need to be paused by owner)
+    function pauseSubscription(uint256 index) external returns(uint256) {
+        require(subscriptions.length > index, "Index out of bounds");
+        require(subscriptions[index].from == msg.sender,
+            "You are not the owner of this subscription");
+        require(subscriptions[index].active, "Subscription is not active");
+        require(!subscriptions[index].paused, "Subscription is already paused");
+        subscriptions[index].paused = true;
+        emit ChainflowSubscriptionPaused(msg.sender, index, block.timestamp);
+        return subscriptions[index].upKeepId;
+    }
+
+    // resume a subscription (upKeep need to be resumed by owner)
+    function resumeSubscription(uint256 index) external returns(uint256) {
+        require(subscriptions.length > index, "Index out of bounds");
+        require(subscriptions[index].from == msg.sender,
+            "You are not the owner of this subscription");
+        require(subscriptions[index].active, "Subscription is not active");
+        require(subscriptions[index].paused, "Subscription is not paused");
+        subscriptions[index].paused = false;
+        emit ChainflowSubscriptionResumed(msg.sender, index, block.timestamp);
+        return subscriptions[index].upKeepId;
+    }
+
     // cancel a subscription (upKeep need to be canceled by owner)
     function cancelSubscription(uint256 index) external returns(uint256) {
         require(subscriptions.length >index, "Index out of bounds");
         require(subscriptions[index].from == msg.sender,
             "You are not the owner of this subscription");
+        require(subscriptions[index].active, "Subscription is not active");
         subscriptions[index].active = false;
         userNbSubs[msg.sender]--;
+        emit ChainflowSubscriptionCanceled(msg.sender, index, block.timestamp);
         return subscriptions[index].upKeepId;
     }
 
@@ -154,7 +228,7 @@ contract ChainflowContract is AutomationCompatibleInterface {
         uint256 index = abi.decode(performData, (uint256));
         Subscription memory sub = subscriptions[index];
         require(subscriptions.length > index, "Index out of bounds");
-        require(sub.active, "Subscription is not active");
+        require(sub.active && !sub.paused, "Subscription is not active");
         require(block.timestamp >= sub.nextPayment, "Not time to pay yet");
 
         ChainflowPayment(payable(sub.from)).sendToken(
@@ -163,13 +237,20 @@ contract ChainflowContract is AutomationCompatibleInterface {
             payable(subscriptions[index].to)
         );
         subscriptions[index].nextPayment += sub.interval;
+        subscriptions[index].lastPaymentTimestamp = block.timestamp;
+        subscriptions[index].nbPaymentsDone++;
+        if (subscriptions[index].nbPaymentsDone == subscriptions[index].nbPayments) {
+            subscriptions[index].active = false;
+            userNbSubs[msg.sender]--;
+            emit ChainflowSubscriptionLastPayment(sub.from, index, block.timestamp);
+        }
     }
 
     // function called by chainlink automations to check if a subscription need to be paid
     function checkUpkeep(bytes calldata checkData) external view returns (bool upkeepNeeded, bytes memory performData) {
         uint256 index = abi.decode(checkData, (uint256));
         if (subscriptions.length <= index ||
-            !subscriptions[index].active ||
+            !subscriptions[index].active || subscriptions[index].paused ||
             block.timestamp < subscriptions[index].nextPayment) {
             return (false, "");
         }
@@ -189,8 +270,8 @@ contract ChainflowContract is AutomationCompatibleInterface {
     }
 
     // get list of index for each subscriptions msg.sender have
-    function getMySubscriptions() external view returns (uint256[] memory) {
-        uint256[] memory mySubs = new uint256[](userNbSubs[msg.sender]);
+    function getMySubscriptions(address user) external view returns (uint256[] memory) {
+        uint256[] memory mySubs = new uint256[](userNbSubs[user]);
         uint8 j = 0;
 
         for (uint256 i = 0; i < subscriptions.length; i++) {
@@ -220,6 +301,9 @@ contract ChainflowContract is AutomationCompatibleInterface {
 contract ChainflowPayment {
     bytes32 private constant _DEDICATED_ADDR_SLOT = 
         bytes32(uint256(keccak256("chainflow.dedicatedMsgSender")) - 1);
+    string constant public version = "Chainflow Payment 0.2";
+
+    event ChainflowPaymentSent(address token, uint256 amount, address from, address to, uint256 timestamp);
 
     modifier onlyDedicatedMsgSender() {
         address dedicatedMsgSender;
@@ -252,6 +336,7 @@ contract ChainflowPayment {
         } else {
             IERC20(token).transfer(to, amount);
         }
+        emit ChainflowPaymentSent(token, amount, address(this), to, block.timestamp);
     }
 
     receive() external payable {}

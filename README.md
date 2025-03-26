@@ -14,7 +14,7 @@ forge install
 npm install
 ```
 
-## Usage
+### Usage
 
 run app
 ```shell
@@ -43,6 +43,11 @@ ChainflowPayment sepolia address : `0xEC4a3DBCef2d57B0eB861092d584AFCAa832c0FD`
 - [ ] need to calculate the min value to fund the upkeep with a simulate call in the front.
 - [ ] boutton to cancel the subscription (with the upKeep cancel and withdraw of the upkeep funds on the registry contract)
 - [ ] add max nb payment in the subscription
+- [ ] save last payment time in subscriptions array
+- [ ] add func toggle subscription to pause and resume the subscription
+- [ ] add chainflowPayment contract func to identify if on the EOA, the eip 7702 is active and linked to the chainflow payment contract
+- [ ] add events in the chainflow contract to log the subscription creation, cancelation, pause and resume
+- [ ] add events in the chainflow payment contract to log the payment
 
 if want to cancel the subscription and withdraw the upkeep funds, need to call the `cancelSubscription` in chainflow contract and `cancelUpkeep(uint256 id)` + `withdrawFunds(uint256 id, address to)` in the chainlink registery contract.
 
