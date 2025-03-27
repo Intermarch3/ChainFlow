@@ -9,7 +9,7 @@
   },
   "dependencies": {
     "core-js": "^3.8.3",
-    "viem": "^2.23.12",
+    "viem": "^2.24.1",
     "vue": "^3.2.13"
   },
   "devDependencies": {

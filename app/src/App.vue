@@ -91,12 +91,11 @@
 </template>
 
 <script>
-import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeFunctionData, zeroAddress } from 'viem'
+import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeFunctionData, zeroAddress, custom, maxInt256, maxUint96 } from 'viem'
 import { sepolia } from 'viem/chains'
 import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
 import { LinkTokenABI, LinkTokenAddress } from './contracts/LinkToken'
 import { PaymentAbi, PaymentContractAddress } from './contracts/PaymentContract'
-import { eip7702Actions } from 'viem/experimental'
 import { privateKeyToAccount } from 'viem/accounts'
 
 // Import des composants
@@ -164,25 +163,22 @@ export default {
         });
         
         // Si en mode dev et que la clé privée est disponible, utiliser cette clé
-        if (this.isDevMode && process.env.WALLET_PRIVATE_KEY) {
+        if (this.isDevMode && process.env.VUE_APP_WALLET_PRIVATE_KEY) {
           try {
             // Créer un compte à partir de la clé privée
-            this.privateKeyAccount = privateKeyToAccount(`0x${process.env.WALLET_PRIVATE_KEY}`);
+            this.privateKeyAccount = privateKeyToAccount(`0x${process.env.VUE_APP_WALLET_PRIVATE_KEY}`);
             
             // Créer un client wallet en utilisant la clé privée
             this.walletClient = createWalletClient({
+              account: this.privateKeyAccount,
               chain: sepolia,
               transport: http(),
-              account: this.privateKeyAccount
-            }).extend(eip7702Actions());
+            });
             
             // Définir l'adresse du wallet
             this.walletAddress = this.privateKeyAccount.address;
             this.isConnected = true;
             console.log("Connecté avec la clé privée:", this.truncatedAddress);
-            
-            // Vérifier si le wallet utilise déjà l'implémentation ChainflowPayment
-            await this.checkWalletImplementation();
             
             // Charger les abonnements
             this.loadSubscriptions();
@@ -195,12 +191,6 @@ export default {
           }
         }
         
-        // Mode de connexion standard avec MetaMask
-        this.walletClient = createWalletClient({
-          chain: sepolia,
-          transport: http(process.env.VUE_APP_RPC_URL || 'https://sepolia.drpc.org')
-        }).extend(eip7702Actions());
-        
         // Demander la connexion via metamask
         if (window.ethereum) {
           const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
@@ -208,9 +198,11 @@ export default {
             this.walletAddress = accounts[0];
             this.isConnected = true;
             
-            // Vérifier si le wallet utilise déjà l'implémentation ChainflowPayment
-            await this.checkWalletImplementation();
-            
+            this.walletClient = createWalletClient({
+              account: this.walletAddress,
+              chain: sepolia,
+              transport: custom(window.ethereum)
+            });
             // Charger les abonnements
             this.loadSubscriptions();
             
@@ -229,12 +221,12 @@ export default {
     // Vérifier si le mode développement est activé
     checkDevMode() {
       // Récupérer la variable d'environnement DEVMODE
-      const devMode = process.env.DEVMODE;
+      const devMode = process.env.VUE_APP_DEVMODE;
       this.isDevMode = devMode === 'true' || devMode === true;
       console.log("Mode développement:", this.isDevMode);
       
       if (this.isDevMode) {
-        if (process.env.WALLET_PRIVATE_KEY) {
+        if (process.env.VUE_APP_WALLET_PRIVATE_KEY) {
           console.log("Clé privée disponible pour le mode développement");
         } else {
           console.warn("Mode développement activé mais aucune clé privée trouvée");
@@ -451,7 +443,7 @@ export default {
       this.pendingTransactions = []
       this.pendingTransactions.push(
         {
-          txType: 1,
+          type: 1,
           id: this.pendingTransactions.length + 1,
           name: 'Transformation du wallet en contrat de paiement',
           description: 'Autoriser le contrat ChainFlow à effectuer des paiements',
@@ -475,7 +467,7 @@ export default {
       // Ajouter les transactions pour LINK et création de l'abonnement
       this.pendingTransactions.push(
         {
-          type: 2,
+          type: 3,
           id: this.pendingTransactions.length + 1,
           name: 'Approbation des tokens LINK',
           description: 'Autoriser le contrat ChainFlow à utiliser vos tokens LINK pour Chainlink Automation',
@@ -483,7 +475,7 @@ export default {
           hash: null
         },
         {
-          type: 3,
+          type: 4,
           id: this.pendingTransactions.length + 2,
           name: 'Création de l\'abonnement',
           description: 'Finaliser la création de l\'abonnement récurrent',
@@ -509,9 +501,8 @@ export default {
       if (!this.newSubscriptionData || this.currentTransactionIndex >= this.pendingTransactions.length) {
         return;
       }
-      
-      const currentTx = this.pendingTransactions[this.currentTransactionIndex];
-      currentTx.status = 'processing';
+
+      var currentTx = this.pendingTransactions[this.currentTransactionIndex];
       
       try {
         let hash;
@@ -519,25 +510,24 @@ export default {
         let interval;
         
         // Calculer l'ID de la transaction en fonction de l'implémentation
-        const txId = this.isChainflowPaymentImplemented ? 
-          currentTx.id : // Si l'implémentation est déjà présente, utiliser l'ID tel quel
-          currentTx.id + 1; // Sinon, ajuster l'ID (car la première transaction est absente)
+        if (this.isChainflowPaymentImplemented) {
+          this.currentTransactionIndex += 1
+          currentTx = this.pendingTransactions[this.currentTransactionIndex]
+        }
         
+        currentTx.status = 'processing';
+
         // Exécuter la transaction en fonction de son ID de type
-        switch (txId) {
+        console.log(this.walletClient, currentTx.type)
+        switch (currentTx.type) {
           case 1:
             // Déploiement du contrat de paiement / Autorisation
-            const accountParam = this.isDevMode && this.privateKeyAccount ? 
-              this.privateKeyAccount.address : 
-              this.walletAddress;
-              
             authorization = await this.walletClient.signAuthorization({
-              account: accountParam,
               contractAddress: PaymentContractAddress,
+              executor: 'self',
+              nonce: 999,
             });
-            
             hash = await this.walletClient.sendTransaction({
-              account: accountParam,
               authorizationList: [authorization],
               data: encodeFunctionData({
                 abi: PaymentAbi,
@@ -546,14 +536,12 @@ export default {
               }),
               to: this.walletAddress,
             });
+            console.log("Auth + setDedicatedMsgSender: ", hash)
             break;
             
           case 2:
             // Approbation du token ERC-20
             hash = await this.walletClient.sendTransaction({
-              account: this.isDevMode && this.privateKeyAccount ? 
-                this.privateKeyAccount.address : 
-                this.walletAddress,
               data: encodeFunctionData({
                 abi: LinkTokenABI, 
                 functionName: 'approve',
@@ -564,14 +552,12 @@ export default {
               }),
               to: this.newSubscriptionData.tokenAddress,
             });
+            console.log("Approve ERC20: ", hash)
             break;
             
           case 3:
             // Approbation des tokens LINK
             hash = await this.walletClient.sendTransaction({
-              account: this.isDevMode && this.privateKeyAccount ? 
-                this.privateKeyAccount.address : 
-                this.walletAddress,
               data: encodeFunctionData({
                 abi: LinkTokenABI,
                 functionName: 'approve',
@@ -582,6 +568,7 @@ export default {
               }),
               to: LinkTokenAddress,
             });
+            console.log("Approve LINK: ", hash)
             break;
             
           case 4:
@@ -592,9 +579,6 @@ export default {
             );
             
             hash = await this.walletClient.sendTransaction({
-              account: this.isDevMode && this.privateKeyAccount ? 
-                this.privateKeyAccount.address : 
-                this.walletAddress,
               data: encodeFunctionData({
                 abi: CFAbi,
                 functionName: 'newSubscription',
@@ -612,6 +596,7 @@ export default {
               value: this.isNativeToken(this.newSubscriptionData.tokenAddress) ? 
                 parseEther(this.newSubscriptionData.amount.toString()) : 0n
             });
+            console.log("New Subscription: ", hash)
             break;
         }
         
