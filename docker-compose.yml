@@ -7,13 +7,31 @@ services:
     working_dir: /app
     volumes:
       - ./app:/app
+      - ./.env:/app/.env
+      - /app/node_modules
     ports:
       - "8080:8080"
     command: >
       sh -c "npm install &&
              npm run serve -- --skip-lint"
     environment:
+      # Essentiels pour le développement
       - NODE_ENV=development
-      - CHOKIDAR_USEPOLLING=true  # Pour permettre le hot-reload dans Docker
+      - CHOKIDAR_USEPOLLING=true  # Activer le polling pour détecter les changements en temps réel
       - ESLINT_NO_DEV_ERRORS=true # Désactiver les erreurs ESLint en dev
+      
+      # Variables importées directement du fichier .env
+      - WALLET_PRIVATE_KEY=${WALLET_PRIVATE_KEY}
+      - DEVMODE=${DEVMODE:-true}
+      
+      # Optimisations de performances pour Node.js
+      - NODE_OPTIONS=--max-old-space-size=4096
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 4G
+        reservations:
+          cpus: '1'
+          memory: 2G
     restart: unless-stopped

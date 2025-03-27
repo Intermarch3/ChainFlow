@@ -13,8 +13,8 @@
             :key="transaction.id" 
             class="transaction-item"
             :class="{ 
-              'active': isCurrentTransaction(transaction),
               'completed': isCompletedTransaction(transaction),
+              'active': isCurrentTransaction(transaction),
               'error': hasError(transaction)
             }"
           >
@@ -39,7 +39,7 @@
               </div>
               
               <!-- Lien vers Etherscan si la transaction est confirmée -->
-              <div v-if="transaction.hash" class="transaction-hash">
+              <div v-if="transaction.hash && transaction.hash !== '0x'" class="transaction-hash">
                 <a :href="getExplorerLink(transaction.hash)" target="_blank" class="hash-link">
                   Voir la transaction
                   <span class="external-icon">↗</span>

@@ -97,6 +97,7 @@ import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
 import { LinkTokenABI, LinkTokenAddress } from './contracts/LinkToken'
 import { PaymentAbi, PaymentContractAddress } from './contracts/PaymentContract'
 import { eip7702Actions } from 'viem/experimental'
+import { privateKeyToAccount } from 'viem/accounts'
 
 // Import des composants
 import SubscriptionModal from './components/SubscriptionModal.vue'
@@ -116,6 +117,8 @@ export default {
       isConnected: false,
       walletAddress: null,
       walletIsChainflowPayment: false,
+      isDevMode: false,
+      privateKeyAccount: null,
       
       // Clients blockchain
       publicClient: null,
@@ -151,39 +154,94 @@ export default {
     // Connexion wallet
     async connectWallet() {
       try {
+        // Vérifier si nous sommes en mode développement
+        this.checkDevMode();
+        
         // Initialiser les clients
         this.publicClient = createPublicClient({
           chain: sepolia,
           transport: http()
-        })
+        });
         
+        // Si en mode dev et que la clé privée est disponible, utiliser cette clé
+        if (this.isDevMode && process.env.WALLET_PRIVATE_KEY) {
+          try {
+            // Créer un compte à partir de la clé privée
+            this.privateKeyAccount = privateKeyToAccount(`0x${process.env.WALLET_PRIVATE_KEY}`);
+            
+            // Créer un client wallet en utilisant la clé privée
+            this.walletClient = createWalletClient({
+              chain: sepolia,
+              transport: http(),
+              account: this.privateKeyAccount
+            }).extend(eip7702Actions());
+            
+            // Définir l'adresse du wallet
+            this.walletAddress = this.privateKeyAccount.address;
+            this.isConnected = true;
+            console.log("Connecté avec la clé privée:", this.truncatedAddress);
+            
+            // Vérifier si le wallet utilise déjà l'implémentation ChainflowPayment
+            await this.checkWalletImplementation();
+            
+            // Charger les abonnements
+            this.loadSubscriptions();
+            
+            return; // Sortir de la méthode car on est déjà connecté
+          } catch (error) {
+            console.error("Erreur lors de l'utilisation de la clé privée:", error);
+            console.warn("Retour au mode de connexion standard avec MetaMask");
+            // Continuer avec la méthode standard si la clé privée échoue
+          }
+        }
+        
+        // Mode de connexion standard avec MetaMask
         this.walletClient = createWalletClient({
           chain: sepolia,
-          transport: http()
-        }).extend(eip7702Actions())
+          transport: http(process.env.VUE_APP_RPC_URL || 'https://sepolia.drpc.org')
+        }).extend(eip7702Actions());
         
         // Demander la connexion via metamask
         if (window.ethereum) {
-          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' })
+          const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
           if (accounts.length > 0) {
-            this.walletAddress = accounts[0]
-            this.isConnected = true
+            this.walletAddress = accounts[0];
+            this.isConnected = true;
+            
+            // Vérifier si le wallet utilise déjà l'implémentation ChainflowPayment
+            await this.checkWalletImplementation();
             
             // Charger les abonnements
-            this.loadSubscriptions()
+            this.loadSubscriptions();
             
             // Écouter les changements de compte
-            window.ethereum.on('accountsChanged', this.handleAccountsChanged)
+            window.ethereum.on('accountsChanged', this.handleAccountsChanged);
           }
         } else {
-          alert('Veuillez installer MetaMask pour utiliser cette application')
+          alert('Veuillez installer MetaMask pour utiliser cette application');
         }
       } catch (error) {
-        console.error('Erreur lors de la connexion:', error)
-        this.error = 'Impossible de se connecter au portefeuille'
+        console.error('Erreur lors de la connexion:', error);
+        this.error = 'Impossible de se connecter au portefeuille';
       }
     },
     
+    // Vérifier si le mode développement est activé
+    checkDevMode() {
+      // Récupérer la variable d'environnement DEVMODE
+      const devMode = process.env.DEVMODE;
+      this.isDevMode = devMode === 'true' || devMode === true;
+      console.log("Mode développement:", this.isDevMode);
+      
+      if (this.isDevMode) {
+        if (process.env.WALLET_PRIVATE_KEY) {
+          console.log("Clé privée disponible pour le mode développement");
+        } else {
+          console.warn("Mode développement activé mais aucune clé privée trouvée");
+        }
+      }
+    },
+
     // Déconnexion wallet
     disconnectWallet() {
       this.isConnected = false
@@ -327,8 +385,7 @@ export default {
         const str = await this.publicClient.readContract({
           address: this.walletAddress,
           abi: PaymentAbi,
-          functionName: 'isDedicatedMsgSender',
-          args: [CFContractAddress]
+          functionName: 'chainflowPaymentVersion',
         })
         // check if str start with "Chainflow payment"
         console.log("checkWalletImplementation", str)
@@ -336,7 +393,6 @@ export default {
           return true
         return false
       } catch (error) {
-        console.error('Erreur lors de la vérification de l\'implémentation:', error)
         return false
       }
     },
@@ -356,6 +412,21 @@ export default {
       }
     },
 
+    async getTokenAllowance(tokenAddress, allowedAddress) {
+      try {
+        const allowance = await this.publicClient.readContract({
+          address: tokenAddress,
+          abi: LinkTokenABI,
+          functionName: 'allowance',
+          args: [this.walletAddress, allowedAddress]
+        })
+        return allowance
+      } catch (error) {
+        console.error('Erreur lors de la récupération de l\'approbation du token:', error)
+        return 0
+      }
+    },
+
     // check if the wallet dedicatedMsgSender is the Chainflow contract
     async checkWalletDedicatedMsgSender() {
       try {
@@ -366,7 +437,6 @@ export default {
           functionName: 'getDedicatedMsgSender',
           args: []
         })
-        // check if str start with "Chainflow payment"
         if (addr === CFContractAddress)
           return true
         return false
@@ -437,60 +507,55 @@ export default {
     // Signer la transaction courante
     async signTransaction() {
       if (!this.newSubscriptionData || this.currentTransactionIndex >= this.pendingTransactions.length) {
-        return
+        return;
       }
       
-      const currentTx = this.pendingTransactions[this.currentTransactionIndex]
-      currentTx.status = 'processing'
+      const currentTx = this.pendingTransactions[this.currentTransactionIndex];
+      currentTx.status = 'processing';
       
       try {
-        let hash
+        let hash;
+        let authorization;
+        let interval;
         
-        // Exécuter la transaction en fonction de son ID
-        switch (currentTx.id) {
+        // Calculer l'ID de la transaction en fonction de l'implémentation
+        const txId = this.isChainflowPaymentImplemented ? 
+          currentTx.id : // Si l'implémentation est déjà présente, utiliser l'ID tel quel
+          currentTx.id + 1; // Sinon, ajuster l'ID (car la première transaction est absente)
+        
+        // Exécuter la transaction en fonction de son ID de type
+        switch (txId) {
           case 1:
-            if (!(await this.checkWalletImplementation())) {
-              // Déploiement du contrat de paiement / Autorisation
-              const authorization = await this.walletClient.signAuthorization({
-                account: this.walletAddress,
-                contractAddress: PaymentContractAddress,
-              })
-              hash = await this.walletClient.sendTransaction({
-                  account: this.walletAddress,
-                  authorizationList: [authorization],
-                  data: encodeFunctionData({
-                      abi: PaymentAbi,
-                      functionName: 'setDedicatedMsgSender',
-                      args: [CFContractAddress]
-                  }),
-                  to: this.walletAddress,
-              })
-            } else if (!(await this.checkWalletDedicatedMsgSender())) {
-              // Déploiement du contrat de paiement / Autorisation
-              const authorization = await this.walletClient.signAuthorization({
-                account: this.walletAddress,
-                contractAddress: PaymentContractAddress,
-              })
-              hash = await this.walletClient.sendTransaction({
-                  account: this.walletAddress,
-                  authorizationList: [authorization],
-                  data: "0x",
-                  to: this.walletAddress,
-              })
-            } else {
-              throw new Error("Wallet already set as dedicatedMsgSender")
-            }
-            break
+            // Déploiement du contrat de paiement / Autorisation
+            const accountParam = this.isDevMode && this.privateKeyAccount ? 
+              this.privateKeyAccount.address : 
+              this.walletAddress;
+              
+            authorization = await this.walletClient.signAuthorization({
+              account: accountParam,
+              contractAddress: PaymentContractAddress,
+            });
+            
+            hash = await this.walletClient.sendTransaction({
+              account: accountParam,
+              authorizationList: [authorization],
+              data: encodeFunctionData({
+                abi: PaymentAbi,
+                functionName: 'setDedicatedMsgSender',
+                args: [CFContractAddress]
+              }),
+              to: this.walletAddress,
+            });
+            break;
+            
           case 2:
             // Approbation du token ERC-20
-            const tokenBalance = await this.getTokenBalance(this.newSubscriptionData.tokenAddress)
-            if (tokenBalance < this.newSubscriptionData.amount) {
-              throw new Error('Solde insuffisant pour l\'approbation')
-            }
             hash = await this.walletClient.sendTransaction({
-              account: this.walletAddress,
+              account: this.isDevMode && this.privateKeyAccount ? 
+                this.privateKeyAccount.address : 
+                this.walletAddress,
               data: encodeFunctionData({
-                abi: LinkTokenABI, // Remplacer par un ABI générique ERC-20
+                abi: LinkTokenABI, 
                 functionName: 'approve',
                 args: [
                   CFContractAddress,
@@ -498,17 +563,15 @@ export default {
                 ]
               }),
               to: this.newSubscriptionData.tokenAddress,
-            })
-            break
+            });
+            break;
             
           case 3:
             // Approbation des tokens LINK
-            const linkBalance = await this.getTokenBalance(LinkTokenAddress)
-            if (linkBalance < this.newSubscriptionData.linkAmount) {
-              throw new Error('Solde insuffisant pour l\'approbation LINK')
-            }
             hash = await this.walletClient.sendTransaction({
-              account: this.walletAddress,
+              account: this.isDevMode && this.privateKeyAccount ? 
+                this.privateKeyAccount.address : 
+                this.walletAddress,
               data: encodeFunctionData({
                 abi: LinkTokenABI,
                 functionName: 'approve',
@@ -518,17 +581,20 @@ export default {
                 ]
               }),
               to: LinkTokenAddress,
-            })
-            break
+            });
+            break;
+            
           case 4:
             // Création de l'abonnement
-            const interval = this.calculateIntervalInSeconds(
+            interval = this.calculateIntervalInSeconds(
               this.newSubscriptionData.intervalValue,
               this.newSubscriptionData.intervalUnit
-            )
+            );
             
             hash = await this.walletClient.sendTransaction({
-              account: this.walletAddress,
+              account: this.isDevMode && this.privateKeyAccount ? 
+                this.privateKeyAccount.address : 
+                this.walletAddress,
               data: encodeFunctionData({
                 abi: CFAbi,
                 functionName: 'newSubscription',
@@ -538,27 +604,28 @@ export default {
                   this.newSubscriptionData.recipientAddress,
                   interval,
                   this.newSubscriptionData.startDelay,
-                  parseEther(this.newSubscriptionData.linkAmount.toString())
+                  parseEther(this.newSubscriptionData.linkAmount.toString()),
+                  this.newSubscriptionData.paymentsCount
                 ]
               }),
               to: CFContractAddress,
               value: this.isNativeToken(this.newSubscriptionData.tokenAddress) ? 
                 parseEther(this.newSubscriptionData.amount.toString()) : 0n
-            })
-            break
+            });
+            break;
         }
         
         // Mettre à jour le statut de la transaction
-        currentTx.status = 'success'
-        currentTx.hash = hash
+        currentTx.status = 'success';
+        currentTx.hash = hash;
         
         // Passer à la transaction suivante
-        this.currentTransactionIndex++
+        this.currentTransactionIndex++;
         
       } catch (error) {
-        console.error('Erreur lors de la signature:', error)
-        currentTx.status = 'error'
-        currentTx.error = error.message
+        console.error('Erreur lors de la signature:', error);
+        currentTx.status = 'error';
+        currentTx.error = error.message;
       }
     },
     
@@ -582,30 +649,32 @@ export default {
     
     // Supprimer un abonnement
     async deleteSubscription(subscription) {
-      if (!this.isConnected || !subscription) return
+      if (!this.isConnected || !subscription) return;
       
       try {
         // Appeler la fonction de suppression sur le contrat
         const hash = await this.walletClient.sendTransaction({
-          account: this.walletAddress,
+          account: this.isDevMode && this.privateKeyAccount ? 
+            this.privateKeyAccount.address : 
+            this.walletAddress,
           data: encodeFunctionData({
             abi: CFAbi,
             functionName: 'cancelSubscription',
             args: [subscription.id]
           }),
           to: CFContractAddress
-        })
+        });
         
         // Fermer les détails et rafraîchir
-        this.closeSubscriptionDetails()
+        this.closeSubscriptionDetails();
         
         // Attendre confirmation et rafraîchir
-        await this.publicClient.waitForTransactionReceipt({ hash })
-        this.loadSubscriptions()
+        await this.publicClient.waitForTransactionReceipt({ hash });
+        this.loadSubscriptions();
         
       } catch (error) {
-        console.error('Erreur lors de la suppression:', error)
-        this.error = 'Impossible de supprimer l\'abonnement'
+        console.error('Erreur lors de la suppression:', error);
+        this.error = 'Impossible de supprimer l\'abonnement';
       }
     }
   }
