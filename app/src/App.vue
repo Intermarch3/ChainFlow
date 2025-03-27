@@ -115,6 +115,7 @@ export default {
       // État de connexion
       isConnected: false,
       walletAddress: null,
+      walletIsChainflowPayment: false,
       
       // Clients blockchain
       publicClient: null,
@@ -219,6 +220,9 @@ export default {
           address: CFContractAddress,
           abi: CFAbi,
           functionName: 'getMySubscriptions',
+          args: [
+            this.walletAddress
+          ],
           account: this.walletAddress
         })
         
@@ -235,6 +239,10 @@ export default {
           // Ajouter l'ID à l'objet
           subscription.id = id
           this.subscriptions.push(subscription)
+
+          // Vérifier si le wallet est un contrat de paiement Chainflow
+          this.walletIsChainflowPayment = await this.checkWalletImplementation()
+          console.log("walletIsChainflowPayment", this.walletIsChainflowPayment)
         }
       } catch (error) {
         console.error('Erreur lors du chargement des abonnements:', error)
@@ -311,23 +319,82 @@ export default {
       // Ouvrir le modal des transactions
       this.showTransactionsModal = true
     },
+
+    // check if the wallet is using ChainflowPayment contract implem
+    async checkWalletImplementation() {
+      try {
+        console.log("checkWalletImplementation")
+        const str = await this.publicClient.readContract({
+          address: this.walletAddress,
+          abi: PaymentAbi,
+          functionName: 'isDedicatedMsgSender',
+          args: [CFContractAddress]
+        })
+        // check if str start with "Chainflow payment"
+        console.log("checkWalletImplementation", str)
+        if (str.startsWith('Chainflow payment'))
+          return true
+        return false
+      } catch (error) {
+        console.error('Erreur lors de la vérification de l\'implémentation:', error)
+        return false
+      }
+    },
+
+    async getTokenBalance(tokenAddress) {
+      try {
+        const balance = await this.publicClient.readContract({
+          address: tokenAddress,
+          abi: LinkTokenABI,
+          functionName: 'balanceOf',
+          args: [this.walletAddress]
+        })
+        return balance
+      } catch (error) {
+        console.error('Erreur lors de la récupération du solde du token:', error)
+        return 0
+      }
+    },
+
+    // check if the wallet dedicatedMsgSender is the Chainflow contract
+    async checkWalletDedicatedMsgSender() {
+      try {
+        console.log("checkWalletImplementation")
+        const addr = await this.publicClient.readContract({
+          address: this.walletAddress,
+          abi: PaymentAbi,
+          functionName: 'getDedicatedMsgSender',
+          args: []
+        })
+        // check if str start with "Chainflow payment"
+        if (addr === CFContractAddress)
+          return true
+        return false
+      } catch (error) {
+        console.error('Erreur lors de la vérification de l\'address du dedicatedMsgSender:', error)
+        return false
+      }
+    },
     
     // Préparer les transactions nécessaires pour créer un abonnement
     preparePendingTransactions(data) {
-      this.pendingTransactions = [
+      this.pendingTransactions = []
+      this.pendingTransactions.push(
         {
-          id: 1,
+          txType: 1,
+          id: this.pendingTransactions.length + 1,
           name: 'Transformation du wallet en contrat de paiement',
           description: 'Autoriser le contrat ChainFlow à effectuer des paiements',
-          status: 'pending',
+          status: this.walletIsChainflowPayment ? 'success' : 'pending',
           hash: null
         }
-      ]
+      )
       
       // Si c'est un token ERC-20, on ajoute l'approbation
       if (!this.isNativeToken(data.tokenAddress)) {
         this.pendingTransactions.push({
-          id: 2,
+          type: 2,
+          id: this.pendingTransactions.length + 1,
           name: 'Approbation du token ERC-20',
           description: `Autoriser le contrat ChainFlow à utiliser vos tokens ${data.tokenSymbol || 'ERC-20'}`,
           status: 'pending',
@@ -338,6 +405,7 @@ export default {
       // Ajouter les transactions pour LINK et création de l'abonnement
       this.pendingTransactions.push(
         {
+          type: 2,
           id: this.pendingTransactions.length + 1,
           name: 'Approbation des tokens LINK',
           description: 'Autoriser le contrat ChainFlow à utiliser vos tokens LINK pour Chainlink Automation',
@@ -345,6 +413,7 @@ export default {
           hash: null
         },
         {
+          type: 3,
           id: this.pendingTransactions.length + 2,
           name: 'Création de l\'abonnement',
           description: 'Finaliser la création de l\'abonnement récurrent',
@@ -354,7 +423,7 @@ export default {
       )
       
       // Réinitialiser l'index de transaction courante
-      this.currentTransactionIndex = 0
+      this.currentTransactionIndex = this.walletIsChainflowPayment ? 1 : 0
     },
     
     // Fermer le modal des transactions
@@ -380,26 +449,44 @@ export default {
         // Exécuter la transaction en fonction de son ID
         switch (currentTx.id) {
           case 1:
-            // Déploiement du contrat de paiement / Autorisation
-            const authorization = await this.walletClient.signAuthorization({
-              account: this.walletAddress,
-              contractAddress: PaymentContractAddress,
-            })
-            
-            hash = await this.walletClient.sendTransaction({
-              account: this.walletAddress,
-              authorizationList: [authorization],
-              data: encodeFunctionData({
-                abi: PaymentAbi,
-                functionName: 'setDedicatedMsgSender',
-                args: [CFContractAddress]
-              }),
-              to: this.walletAddress,
-            })
+            if (!(await this.checkWalletImplementation())) {
+              // Déploiement du contrat de paiement / Autorisation
+              const authorization = await this.walletClient.signAuthorization({
+                account: this.walletAddress,
+                contractAddress: PaymentContractAddress,
+              })
+              hash = await this.walletClient.sendTransaction({
+                  account: this.walletAddress,
+                  authorizationList: [authorization],
+                  data: encodeFunctionData({
+                      abi: PaymentAbi,
+                      functionName: 'setDedicatedMsgSender',
+                      args: [CFContractAddress]
+                  }),
+                  to: this.walletAddress,
+              })
+            } else if (!(await this.checkWalletDedicatedMsgSender())) {
+              // Déploiement du contrat de paiement / Autorisation
+              const authorization = await this.walletClient.signAuthorization({
+                account: this.walletAddress,
+                contractAddress: PaymentContractAddress,
+              })
+              hash = await this.walletClient.sendTransaction({
+                  account: this.walletAddress,
+                  authorizationList: [authorization],
+                  data: "0x",
+                  to: this.walletAddress,
+              })
+            } else {
+              throw new Error("Wallet already set as dedicatedMsgSender")
+            }
             break
-            
           case 2:
             // Approbation du token ERC-20
+            const tokenBalance = await this.getTokenBalance(this.newSubscriptionData.tokenAddress)
+            if (tokenBalance < this.newSubscriptionData.amount) {
+              throw new Error('Solde insuffisant pour l\'approbation')
+            }
             hash = await this.walletClient.sendTransaction({
               account: this.walletAddress,
               data: encodeFunctionData({
@@ -416,6 +503,10 @@ export default {
             
           case 3:
             // Approbation des tokens LINK
+            const linkBalance = await this.getTokenBalance(LinkTokenAddress)
+            if (linkBalance < this.newSubscriptionData.linkAmount) {
+              throw new Error('Solde insuffisant pour l\'approbation LINK')
+            }
             hash = await this.walletClient.sendTransaction({
               account: this.walletAddress,
               data: encodeFunctionData({
@@ -429,7 +520,6 @@ export default {
               to: LinkTokenAddress,
             })
             break
-            
           case 4:
             // Création de l'abonnement
             const interval = this.calculateIntervalInSeconds(

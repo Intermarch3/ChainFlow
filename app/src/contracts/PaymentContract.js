@@ -22,6 +22,19 @@ export const PaymentAbi = [
     },
     {
     "type": "function",
+    "name": "getDedicatedMsgSender",
+    "inputs": [],
+    "outputs": [
+        {
+        "name": "",
+        "type": "address",
+        "internalType": "address"
+        }
+    ],
+    "stateMutability": "view"
+    },
+    {
+    "type": "function",
     "name": "sendToken",
     "inputs": [
         {
@@ -114,4 +127,4 @@ export const PaymentAbi = [
     }
 ]
 
-export const PaymentContractAddress = '0xEC4a3DBCef2d57B0eB861092d584AFCAa832c0FD'
+export const PaymentContractAddress = '0x973c5F90d1Fdd41c7befD3b2dcA48f73609A3b46'

@@ -43,7 +43,7 @@ ChainflowPayment sepolia address : `0xEC4a3DBCef2d57B0eB861092d584AFCAa832c0FD`
 
 V1.0:
 ChainflowContract sepolia address : `0x8a910720406Ce2109FAb303BdEbeD6a2f961D81E`
-ChainflowPayment sepolia address : `0xd55D633Df41244Fa084a77f537Bd7017f38f2e6d`
+ChainflowPayment sepolia address : `0x973c5F90d1Fdd41c7befD3b2dcA48f73609A3b46`
 
 #### TODO :
 - [ ] need to calculate the min value to fund the upkeep with a simulate call in the front.

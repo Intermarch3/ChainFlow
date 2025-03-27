@@ -328,6 +328,16 @@ contract ChainflowPayment {
         _;
     }
 
+    // get dedicatedMsgSender
+    function getDedicatedMsgSender() public view returns (address) {
+        address dedicatedMsgSender;
+        bytes32 slot = _DEDICATED_ADDR_SLOT;
+        assembly {
+            dedicatedMsgSender := sload(slot)
+        }
+        return dedicatedMsgSender;
+    }
+
     // change dedicatedMsgSender (address who can enable payment)
     function setDedicatedMsgSender(address dedicatedMsgSender) public {
         require(msg.sender == address(this),
