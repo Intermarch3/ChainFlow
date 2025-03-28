@@ -30,7 +30,7 @@
           
           <div class="detail-row">
             <div class="detail-label">Adresse du token:</div>
-            <div class="detail-value address">{{ subscription.token }}</div>
+            <div class="detail-value address">{{ tokenAddress }}</div>
           </div>
           
           <div class="detail-row">
@@ -92,6 +92,12 @@ export default {
   computed: {
     tokenSymbol() {
       return this.isNativeToken(this.subscription.token) ? 'ETH' : 'ERC-20'
+    },
+    tokenAddress() {
+      if (this.isNativeToken(this.subscription.token)) {
+        return 'ETH (TOKEN NATIF)'
+      }
+      return this.subscription.token
     }
   },
   methods: {
@@ -243,8 +249,6 @@ export default {
   padding-top: 10px;
 }
 
-
-
 .detail-status {
   position: relative;
   right: 0;
@@ -324,8 +328,8 @@ export default {
 }
 
 .cancel-btn {
-  background-color: #f1f5f9;
-  color: #334155;
+  background-color: #fefcbf;
+  color: #ca8a04;
   border: none;
   padding: 10px 20px;
   border-radius: 6px;
