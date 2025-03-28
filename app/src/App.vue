@@ -35,8 +35,8 @@
               class="subscription-card"
               @click="showSubscriptionDetails(subscription)"
             >
-              <div class="subscription-status" :class="{ 'active': subscription.active }">
-                {{ subscription.active ? 'Actif' : 'Inactif' }}
+              <div class="subscription-status" :class="{ 'active': subscription.active, 'paused': subscription.paused }">
+                {{ subscription.active ? (subscription.paused ? 'Paused' : 'Active') : 'Inactive' }}
               </div>
               <div class="subscription-amount">
                 <strong>{{ formatAmount(subscription.amount) }}</strong>
@@ -76,6 +76,8 @@
       v-if="selectedSubscription !== null" 
       :subscription="selectedSubscription"
       @close="closeSubscriptionDetails"
+      @pause="pauseSubscription"
+      @resume="resumeSubscription"
       @delete="deleteSubscription"
     />
 
@@ -314,16 +316,18 @@ export default {
     
     // Formater les intervalles en texte humain
     formatInterval(intervalInSeconds) {
-      if (intervalInSeconds < 60) {
-        return `${intervalInSeconds} secondes`
-      } else if (intervalInSeconds < 3600) {
-        const minutes = Math.floor(intervalInSeconds / 60)
+      const seconds = typeof intervalInSeconds === 'bigint' ? 
+        Number(intervalInSeconds) : Number(intervalInSeconds);
+      if (seconds < 60) {
+        return `${seconds} secondes`
+      } else if (seconds < 3600) {
+        const minutes = Math.floor(seconds / 60)
         return `${minutes} minute${minutes > 1 ? 's' : ''}`
-      } else if (intervalInSeconds < 86400) {
-        const hours = Math.floor(intervalInSeconds / 3600)
+      } else if (seconds < 86400) {
+        const hours = Math.floor(seconds / 3600)
         return `${hours} heure${hours > 1 ? 's' : ''}`
       } else {
-        const days = Math.floor(intervalInSeconds / 86400)
+        const days = Math.floor(seconds / 86400)
         return `${days} jour${days > 1 ? 's' : ''}`
       }
     },
@@ -441,16 +445,18 @@ export default {
     // Préparer les transactions nécessaires pour créer un abonnement
     preparePendingTransactions(data) {
       this.pendingTransactions = []
-      this.pendingTransactions.push(
-        {
-          type: 1,
-          id: this.pendingTransactions.length + 1,
-          name: 'Transformation du wallet en contrat de paiement',
-          description: 'Autoriser le contrat ChainFlow à effectuer des paiements',
-          status: this.walletIsChainflowPayment ? 'success' : 'pending',
-          hash: null
-        }
-      )
+      if (!this.walletIsChainflowPayment) {
+        this.pendingTransactions.push(
+          {
+            type: 1,
+            id: this.pendingTransactions.length + 1,
+            name: 'Transformation du wallet en contrat de paiement',
+            description: 'Autoriser le contrat ChainFlow à effectuer des paiements',
+            status: this.walletIsChainflowPayment ? 'success' : 'pending',
+            hash: null
+          }
+        )
+      }
       
       // Si c'est un token ERC-20, on ajoute l'approbation
       if (!this.isNativeToken(data.tokenAddress)) {
@@ -537,6 +543,7 @@ export default {
               to: this.walletAddress,
             });
             console.log("Auth + setDedicatedMsgSender: ", hash)
+            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
             
           case 2:
@@ -553,6 +560,7 @@ export default {
               to: this.newSubscriptionData.tokenAddress,
             });
             console.log("Approve ERC20: ", hash)
+            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
             
           case 3:
@@ -569,6 +577,7 @@ export default {
               to: LinkTokenAddress,
             });
             console.log("Approve LINK: ", hash)
+            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
             
           case 4:
@@ -597,6 +606,7 @@ export default {
                 parseEther(this.newSubscriptionData.amount.toString()) : 0n
             });
             console.log("New Subscription: ", hash)
+            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
         }
         
@@ -631,6 +641,60 @@ export default {
       this.closeTransactionsModal()
       this.loadSubscriptions()
     },
+
+    async resumeSubscription(subscription) {
+      if (!this.isConnected || !subscription) return;
+      
+      try {
+        // Appeler la fonction de reprise sur le contrat
+        const hash = await this.walletClient.sendTransaction({
+          data: encodeFunctionData({
+            abi: CFAbi,
+            functionName: 'resumeSubscription',
+            args: [subscription.id]
+          }),
+          to: CFContractAddress
+        });
+        
+        // Fermer les détails et rafraîchir
+        this.closeSubscriptionDetails();
+        
+        // Attendre confirmation et rafraîchir
+        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
+        this.loadSubscriptions();
+        
+      } catch (error) {
+        console.error('Erreur lors de la reprise:', error);
+        this.error = 'Impossible de reprendre l\'abonnement';
+      }
+    },
+
+    async pauseSubscription(subscription) {
+      if (!this.isConnected || !subscription) return;
+      
+      try {
+        // Appeler la fonction de pause sur le contrat
+        const hash = await this.walletClient.sendTransaction({
+          data: encodeFunctionData({
+            abi: CFAbi,
+            functionName: 'pauseSubscription',
+            args: [subscription.id]
+          }),
+          to: CFContractAddress
+        });
+        
+        // Fermer les détails et rafraîchir
+        this.closeSubscriptionDetails();
+        
+        // Attendre confirmation et rafraîchir
+        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
+        this.loadSubscriptions();
+        
+      } catch (error) {
+        console.error('Erreur lors de la pause:', error);
+        this.error = 'Impossible de mettre en pause l\'abonnement';
+      }
+    },
     
     // Supprimer un abonnement
     async deleteSubscription(subscription) {
@@ -639,9 +703,6 @@ export default {
       try {
         // Appeler la fonction de suppression sur le contrat
         const hash = await this.walletClient.sendTransaction({
-          account: this.isDevMode && this.privateKeyAccount ? 
-            this.privateKeyAccount.address : 
-            this.walletAddress,
           data: encodeFunctionData({
             abi: CFAbi,
             functionName: 'cancelSubscription',
@@ -654,7 +715,7 @@ export default {
         this.closeSubscriptionDetails();
         
         // Attendre confirmation et rafraîchir
-        await this.publicClient.waitForTransactionReceipt({ hash });
+        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         this.loadSubscriptions();
         
       } catch (error) {
@@ -835,6 +896,11 @@ body {
 .subscription-status.active {
   background-color: #dcfce7;
   color: #15803d;
+}
+
+.subscription-status.paused {
+  background-color: #fef3c7!important;
+  color: #ca8a04!important;
 }
 
 .subscription-amount {

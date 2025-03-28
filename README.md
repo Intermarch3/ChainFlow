@@ -77,5 +77,5 @@ cast send 0x27d517Bc2C440dcAFeaD6Ba502f47235Df508266 "newSubscription(address,ui
 #### successfull transaction
 ChainflowPayment deploy call succes : `0xb0ac85935cf6fa7c7abe5fa996a207960f7e3d18304af47c34480a3799603aae`
 ChainflowContract deploy call succes : `0x326596ff887dd1fab892152f3607fed693851dcb13052686f9fee4ad942bb665`
-setDedicatedMsgSender on ChainflowPayment + authorization for EOA to behave like ChainflowPayment contract call succes : `0x6ea4f2dae9192537d2daffc8bc80aa5c16b9abccda3037bdfffb4545b51ce2a4`
-new subscription call succes : `0x61c0a703d5b632a38bb4a6753323eadc33a7b1219494fbb0cb8005153bc5b0fc`
+setDedicatedMsgSender on ChainflowPayment + authorization for EOA to behave like ChainflowPayment contract call succes : `0xfc20caf825e4cb7d301bc13d6ffd9055f6ffb8b90ae00787d36fec1b12bb88f0`
+new subscription call succes : `0x8fdb37cb8ec0720a44d424649bdcd2a11a55d1bc69929865d01025ddac885761`
