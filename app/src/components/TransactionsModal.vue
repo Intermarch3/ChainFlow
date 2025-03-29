@@ -389,6 +389,10 @@ export default {
   background-color: #fee2e2;
   padding: 6px 10px;
   border-radius: 4px;
+  white-space: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
 }
 
 .transaction-hash {

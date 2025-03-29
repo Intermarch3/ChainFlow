@@ -1,81 +1,54 @@
 # ChainFlow
-Abonnement récurrent blockchain utilisant l'EIP 7702 et chainlink automation
+
+ChainFlow est une solution innovante permettant de gérer des abonnements sur les blockchain EVM.
+Associé à Chainlink Automation, ChainFlow permet d'automatiser les transactions récurrentes pour la gestion des abonnements.
+
+![homepage](./img/homepage.png)
+
+## Fonctionnalités
+
+- **Création d'abonnements multiples** : Chaque utilisateur peut créer plusieurs abonnements selon ses besoins.
+- **Personnalisation des intervalles** : Choisissez des intervalles en secondes, heures, ou jours.
+- **Support multi-devises** : Réalisez des transactions en Ethereum ou en tokens ERC20.
+- **Automatisation des paiements** : Les transactions s'exécutent automatiquement grâce à Chainlink Automation.
+- **Interface conviviale** : Un front-end intuitif permet de créer, consulter, mettre en pause ou supprimer vos abonnements en quelques clics.
 
 ## Installation
 
-```shell
-cd app
+### Front-end
+
+```bash
+cd app/
 npm install
+npm run serve
 ```
 
-```shell
-cd contracts
+### Contrats
+
+```bash
+cd contracts/
 forge install
 npm install
 ```
 
-### Usage
+## Utilisation
 
-run app
-```shell
-npm run serve
-```
+1. Connectez votre wallet via l'interface front-end.
+2. Créez un abonnement en définissant l'intervalle et le montant (en Ethereum ou en ERC20) et d'autres parametres.
+3. Consultez la liste de vos abonnements actifs, mettez-les en pause ou supprimez-les directement depuis l'interface.
 
-run anvil node
-```shell
-anvil --hardfork prague
-```
+## Déploiement
 
-deploy contracts
-```shell
-forge create src/Counter.sol:TestContract --private-key "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d" --legacy --broadcast 
-# this pk is an anvil dev account (add rpc url if needed)
-```
+### Addresses sur Sepolia
+- LINK token : `0x779877a7b0d9e8603169ddbd7836e478b4624789`
+- registrar : `0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976`
+- registry : `0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad`
 
-#### Used addresses on sepolia network
-link token sepolia address : `0x779877a7b0d9e8603169ddbd7836e478b4624789`
-registrar sepolia address : `0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976`
-registry sepolia address : `0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad`
+#### V1.0:
+- ChainflowContract: `0x8a910720406Ce2109FAb303BdEbeD6a2f961D81E`
+- ChainflowPayment: `0x973c5F90d1Fdd41c7befD3b2dcA48f73609A3b46`
 
-V0.1:
-ChainflowContract sepolia address : `0xaD63C0c9cAFeC5c9b4b14171899cf945b4765a44`
-ChainflowPayment sepolia address : `0xEC4a3DBCef2d57B0eB861092d584AFCAa832c0FD`
+## Contributions
 
-V1.0:
-ChainflowContract sepolia address : `0x8a910720406Ce2109FAb303BdEbeD6a2f961D81E`
-ChainflowPayment sepolia address : `0x973c5F90d1Fdd41c7befD3b2dcA48f73609A3b46`
-
-#### TODO :
-- [ ] need to calculate the min value to fund the upkeep with a simulate call in the front.
-- [ ] boutton to cancel the subscription (with the upKeep cancel and withdraw of the upkeep funds on the registry contract)
-- [ ] add max nb payment in the subscription
-- [ ] save last payment time in subscriptions array
-- [ ] add func toggle subscription to pause and resume the subscription
-- [ ] add chainflowPayment contract func to identify if on the EOA, the eip 7702 is active and linked to the chainflow payment contract
-- [ ] add events in the chainflow contract to log the subscription creation, cancelation, pause and resume
-- [ ] add events in the chainflow payment contract to log the payment
-
-if want to cancel the subscription and withdraw the upkeep funds, need to call the `cancelSubscription` in chainflow contract and `cancelUpkeep(uint256 id)` + `withdrawFunds(uint256 id, address to)` in the chainlink registery contract.
-
-
-#### steps to create a new subscription
-```shell
-//deploy chainflow payment contract
-forge create src/Chainflow.sol:ChainflowPayment --private-key "" --legacy --broadcast -vvvvv --rpc-url https://sepolia.drpc.org
-
-
-//deploy chainflow contract
-forge create src/Chainflow.sol:ChainflowContract --private-key "" --legacy --broadcast -vvvvv --rpc-url https://sepolia.drpc.org --constructor-args "0x2A7c442BDf35346b9F43937696809f37Ad16a9c7" "0xb0E49c5D0d05cbc241d68c05BC5BA1d1B7B72976" "0x86EFBD0b6736Bed994962f9797049422A3A8E8Ad" "0x779877a7b0d9e8603169ddbd7836e478b4624789"
-
-//approve link to be spent by the chainflow contract
-cast send 0x779877a7b0d9e8603169ddbd7836e478b4624789 "approve(address,uint256)" 0x27d517Bc2C440dcAFeaD6Ba502f47235Df508266 500000000000000000 --rpc-url https://sepolia.drpc.org --private-key ""
-
-// new subscription
-cast send 0x27d517Bc2C440dcAFeaD6Ba502f47235Df508266 "newSubscription(address,uint96,address,uint256,uint256,uint96)(uint256)" "0x0000000000000000000000000000000000000000" 2 "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC" 30 10 500000000000000000 --rpc-url https://sepolia.drpc.org --private-key "" --gas-price 1000100 --gas-limit 1000000
-```
-
-#### successfull transaction
-ChainflowPayment deploy call succes : `0xb0ac85935cf6fa7c7abe5fa996a207960f7e3d18304af47c34480a3799603aae`
-ChainflowContract deploy call succes : `0x326596ff887dd1fab892152f3607fed693851dcb13052686f9fee4ad942bb665`
-setDedicatedMsgSender on ChainflowPayment + authorization for EOA to behave like ChainflowPayment contract call succes : `0xfc20caf825e4cb7d301bc13d6ffd9055f6ffb8b90ae00787d36fec1b12bb88f0`
-new subscription call succes : `0x8fdb37cb8ec0720a44d424649bdcd2a11a55d1bc69929865d01025ddac885761`
+Les contributions sont les bienvenues !  
+Si vous souhaitez proposer des améliorations ou signaler des problèmes, merci de créer une issue ou de soumettre une pull request sur GitHub.

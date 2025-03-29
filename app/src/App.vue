@@ -517,11 +517,13 @@ export default {
         console.log(this.walletClient, currentTx.type)
         switch (currentTx.type) {
           case 1:
+            
             // Déploiement du contrat de paiement / Autorisation
             authorization = await this.walletClient.signAuthorization({
               contractAddress: PaymentContractAddress,
               executor: 'self',
               nonce: 999,
+              chainId: sepolia.id,
             });
             hash = await this.walletClient.sendTransaction({
               authorizationList: [authorization],

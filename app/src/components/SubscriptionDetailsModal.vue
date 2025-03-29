@@ -64,10 +64,10 @@
       </div>
       
       <div class="modal-footer">
-        <button v-if="!subscription.paused" @click="confirmePause" class="cancel-btn">Pause cette abonnement</button>
-        <button v-else @click="confirmeResume" class="cancel-btn">Réactiver cette abonnement</button>
+        <button v-if="!subscription.paused" @click="confirmePause" class="cancel-btn">Mettre en pause</button>
+        <button v-else @click="confirmeResume" class="cancel-btn">Réactiver</button>
         <button @click="confirmDelete" class="delete-btn">
-          Supprimer cette abonnement
+          Supprimer
         </button>
       </div>
     </div>
