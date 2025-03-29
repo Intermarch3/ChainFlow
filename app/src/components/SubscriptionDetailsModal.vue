@@ -50,7 +50,7 @@
           
           <div class="detail-row">
             <div class="detail-label">Paiements effectués:</div>
-            <div class="detail-value">{{ subscription.nbPaymentsDone || '0' }}</div>
+            <div class="detail-value">{{ subscription.nbPaymentsDone || '0' }} / {{ subscription.nbPayments }}</div>
           </div>
           
           <!-- Lien vers l'explorateur de blocs -->

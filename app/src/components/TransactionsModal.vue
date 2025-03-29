@@ -14,13 +14,13 @@
             class="transaction-item"
             :class="{ 
               'completed': isCompletedTransaction(transaction),
-              'active': isCurrentTransaction(transaction),
+              'active': !oneTxIsProcessing() && isCurrentTransaction(transaction),
               'error': hasError(transaction)
             }"
           >
             <!-- Indicateur de statut -->
             <div class="transaction-status">
-              <div v-if="isProcessing && isCurrentTransaction(transaction)" class="status-spinner"></div>
+              <div v-if="transactionIsProcessing(transaction)" class="status-spinner"></div>
               <div v-else class="status-icon">
                 <span v-if="isCompletedTransaction(transaction)" class="success-icon">✓</span>
                 <span v-else-if="hasError(transaction)" class="error-icon">⨯</span>
@@ -50,8 +50,8 @@
             <!-- Bouton de signature -->
             <div class="transaction-action">
               <button 
-                v-if="isCurrentTransaction(transaction) && !isProcessing" 
-                @click="sign"
+                v-if="isCurrentTransaction(transaction) && !oneTxIsProcessing()"
+                @click="sign()"
                 class="sign-btn"
               >
                 Signer
@@ -159,17 +159,23 @@ export default {
     finish() {
       this.$emit('finish')
     },
+
+    transactionIsProcessing(transaction) {
+      return transaction.status === 'processing'
+    },
+
+    oneTxIsProcessing() {
+      return this.transactions.some(tx => tx.status === 'processing')
+    },
     
     sign() {
       if (this.currentTransactionIndex < 0 || this.isProcessing) return
+      const txIdx = this.currentTransactionIndex
       
       this.isProcessing = true
       this.$emit('sign')
       
-      // Simuler le temps de confirmation de Metamask et de la blockchain
-      setTimeout(() => {
-        this.isProcessing = false
-      }, 1000)
+      this.isProcessing = false
     },
     
     retry(transaction) {
@@ -344,10 +350,14 @@ export default {
 
 .success-icon {
   color: #10b981;
+  font-size: 30px;
+  font-weight: bold;
 }
 
 .error-icon {
   color: #ef4444;
+  font-size: 30px;
+  font-weight: bold;
 }
 
 .pending-icon {

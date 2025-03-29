@@ -93,7 +93,7 @@
 </template>
 
 <script>
-import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeFunctionData, zeroAddress, custom, maxInt256, maxUint96 } from 'viem'
+import { createPublicClient, createWalletClient, http, formatEther, parseEther, encodeFunctionData, zeroAddress, custom } from 'viem'
 import { sepolia } from 'viem/chains'
 import { CFAbi, CFContractAddress } from './contracts/ChainflowContract'
 import { LinkTokenABI, LinkTokenAddress } from './contracts/LinkToken'
@@ -385,7 +385,7 @@ export default {
         })
         // check if str start with "Chainflow payment"
         console.log("checkWalletImplementation", str)
-        if (str.startsWith('Chainflow payment'))
+        if (str.startsWith("Chainflow Payment"))
           return true
         return false
       } catch (error) {
@@ -426,7 +426,6 @@ export default {
     // check if the wallet dedicatedMsgSender is the Chainflow contract
     async checkWalletDedicatedMsgSender() {
       try {
-        console.log("checkWalletImplementation")
         const addr = await this.publicClient.readContract({
           address: this.walletAddress,
           abi: PaymentAbi,
@@ -445,7 +444,7 @@ export default {
     // Préparer les transactions nécessaires pour créer un abonnement
     preparePendingTransactions(data) {
       this.pendingTransactions = []
-      if (!this.walletIsChainflowPayment) {
+      if (this.walletIsChainflowPayment == false) {
         this.pendingTransactions.push(
           {
             type: 1,
@@ -489,9 +488,6 @@ export default {
           hash: null
         }
       )
-      
-      // Réinitialiser l'index de transaction courante
-      this.currentTransactionIndex = this.walletIsChainflowPayment ? 1 : 0
     },
     
     // Fermer le modal des transactions
@@ -508,18 +504,12 @@ export default {
         return;
       }
 
-      var currentTx = this.pendingTransactions[this.currentTransactionIndex];
-      
+      var currentTx = this.pendingTransactions[this.currentTransactionIndex];      
       try {
         let hash;
         let authorization;
         let interval;
-        
-        // Calculer l'ID de la transaction en fonction de l'implémentation
-        if (this.isChainflowPaymentImplemented) {
-          this.currentTransactionIndex += 1
-          currentTx = this.pendingTransactions[this.currentTransactionIndex]
-        }
+        let receipt;
         
         currentTx.status = 'processing';
 
@@ -543,7 +533,6 @@ export default {
               to: this.walletAddress,
             });
             console.log("Auth + setDedicatedMsgSender: ", hash)
-            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
             
           case 2:
@@ -560,7 +549,6 @@ export default {
               to: this.newSubscriptionData.tokenAddress,
             });
             console.log("Approve ERC20: ", hash)
-            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
             
           case 3:
@@ -577,7 +565,6 @@ export default {
               to: LinkTokenAddress,
             });
             console.log("Approve LINK: ", hash)
-            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
             
           case 4:
@@ -602,13 +589,12 @@ export default {
                 ]
               }),
               to: CFContractAddress,
-              value: this.isNativeToken(this.newSubscriptionData.tokenAddress) ? 
-                parseEther(this.newSubscriptionData.amount.toString()) : 0n
             });
             console.log("New Subscription: ", hash)
-            console.log("receipt", await this.publicClient.waitForTransactionReceipt({ hash }))
             break;
         }
+        receipt = await this.publicClient.waitForTransactionReceipt({ hash })
+        console.log("receipt", receipt)
         
         // Mettre à jour le statut de la transaction
         currentTx.status = 'success';
@@ -656,11 +642,11 @@ export default {
           to: CFContractAddress
         });
         
+        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         // Fermer les détails et rafraîchir
         this.closeSubscriptionDetails();
         
         // Attendre confirmation et rafraîchir
-        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         this.loadSubscriptions();
         
       } catch (error) {
@@ -683,11 +669,11 @@ export default {
           to: CFContractAddress
         });
         
+        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         // Fermer les détails et rafraîchir
         this.closeSubscriptionDetails();
         
         // Attendre confirmation et rafraîchir
-        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         this.loadSubscriptions();
         
       } catch (error) {
@@ -711,11 +697,11 @@ export default {
           to: CFContractAddress
         });
         
+        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         // Fermer les détails et rafraîchir
         this.closeSubscriptionDetails();
         
         // Attendre confirmation et rafraîchir
-        console.log(await this.publicClient.waitForTransactionReceipt({ hash }));
         this.loadSubscriptions();
         
       } catch (error) {

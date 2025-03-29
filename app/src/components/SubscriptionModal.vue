@@ -138,7 +138,7 @@
                   v-model="form.linkAmount" 
                   type="number" 
                   step="0.01" 
-                  min="0" 
+                  min="1" 
                   class="form-control" 
                   required
                 />
