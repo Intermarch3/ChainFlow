@@ -1,5 +1,9 @@
-TODO :
-- Ajouter la transaction pour supprimer et récuperer les fonds du contrat chainlink
-- Améliorer la sécurité avec un proxy
+TODO:
+- Add the transaction to delete and retrieve funds from the Chainlink contract.  
+- Perform a real simulation of the LINK required for the subscription.  
+- Improve security with a proxy.  
 
-if want to cancel the subscription and withdraw the upkeep funds, need to call the `cancelSubscription` in chainflow contract and `cancelUpkeep(uint256 id)` + `withdrawFunds(uint256 id, address to)` in the chainlink registery contract.
+
+Steps to Cancel a subscription:
+- Call `cancelSubscription` in the ChainFlow contract.  
+- Call `cancelUpkeep(uint256 id)` and `withdrawFunds(uint256 id, address to)` in the Chainlink registry contract.  
